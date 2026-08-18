@@ -16,7 +16,7 @@ import UserMenuContent from '@/components/UserMenuContent.vue';
 import { useCurrentUrl } from '@/composables/useCurrentUrl';
 import { getInitials } from '@/composables/useInitials';
 import { login, register } from '@/routes';
-import { index as serversIndex } from '@/routes/servers';
+import { index as serversIndex, show as serverShow } from '@/routes/servers';
 import { index as sitesIndex } from '@/routes/sites';
 
 export type StacklabNav = 'app' | 'server' | 'site' | 'none';
@@ -26,11 +26,13 @@ const props = withDefaults(
         nav?: StacklabNav;
         workspace?: string;
         activeTab?: string;
+        serverUuid?: string;
     }>(),
     {
         nav: 'app',
         workspace: 'Personal',
         activeTab: '',
+        serverUuid: '',
     },
 );
 
@@ -51,11 +53,20 @@ const appTabs = computed(() => [
     { label: 'Register', href: register() },
 ]);
 
-const serverTabs = computed(() => [
-    { label: 'Overview', href: '/servers/fragrant-forest', key: 'overview' },
-    { label: 'Sites', href: '/servers/fragrant-forest#sites', key: 'sites' },
-    { label: 'Servers', href: serversIndex().url, key: 'servers' },
-]);
+const serverTabs = computed(() => {
+    const overview = props.serverUuid
+        ? serverShow(props.serverUuid)
+        : serversIndex();
+    const sites = props.serverUuid
+        ? `${serverShow.url(props.serverUuid)}#sites`
+        : `${serversIndex().url}#sites`;
+
+    return [
+        { label: 'Overview', href: overview, key: 'overview' },
+        { label: 'Sites', href: sites, key: 'sites' },
+        { label: 'Servers', href: serversIndex(), key: 'servers' },
+    ];
+});
 
 const siteTabs = computed(() => [
     { label: 'Overview', href: '/sites/chirper', key: 'overview' },

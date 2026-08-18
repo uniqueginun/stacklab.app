@@ -10,7 +10,7 @@ import ToggleSwitch from '@/components/stacklab/ToggleSwitch.vue';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { show as serverShow } from '@/routes/servers';
+import { index as serversIndex } from '@/routes/servers';
 import { show as siteShow } from '@/routes/sites';
 
 defineOptions({
@@ -50,7 +50,7 @@ const steps = [
     <Head title="Install a Laravel application" />
 
     <Link
-        :href="serverShow()"
+        :href="serversIndex()"
         class="mb-6 inline-flex items-center gap-1 text-sm text-neutral-500 hover:text-neutral-900"
     >
         <ArrowLeft class="size-4" />

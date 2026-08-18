@@ -8,7 +8,7 @@ import {
     DialogDescription,
     DialogTitle,
 } from '@/components/ui/dialog';
-import { show as serverShow } from '@/routes/servers';
+import { index as serversIndex } from '@/routes/servers';
 
 defineProps<{
     open: boolean;
@@ -38,7 +38,7 @@ const download = () => {
 
 const confirm = () => {
     emit('update:open', false);
-    router.visit(serverShow());
+    router.visit(serversIndex());
 };
 </script>
 

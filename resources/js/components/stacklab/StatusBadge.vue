@@ -1,25 +1,43 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 import { cn } from '@/lib/utils';
+import type { ConnectionStatus } from '@/types';
+
+type Status = ConnectionStatus | 'provisioning' | 'deployed' | 'deploying';
 
 const props = defineProps<{
-    status: 'connected' | 'provisioning' | 'deployed' | 'deploying';
+    status: Status;
     class?: string;
 }>();
 
 const label = computed(() => {
-    const labels: Record<typeof props.status, string> = {
+    const labels: Record<Status, string> = {
         connected: 'Connected',
         provisioning: 'Provisioning',
         deployed: 'Deployed',
         deploying: 'Deploying',
+        unverified: 'Unverified server',
+        pending_confirmation: 'Pending confirmation',
+        failed: 'Connection failed',
     };
 
     return labels[props.status];
 });
 
 const styles = computed(() => {
-    if (props.status === 'provisioning' || props.status === 'deploying') {
+    if (props.status === 'failed') {
+        return 'bg-red-50 text-red-700';
+    }
+
+    if (props.status === 'unverified') {
+        return 'bg-neutral-100 text-neutral-600';
+    }
+
+    if (
+        props.status === 'provisioning' ||
+        props.status === 'deploying' ||
+        props.status === 'pending_confirmation'
+    ) {
         return 'bg-amber-50 text-amber-700';
     }
 
@@ -27,7 +45,19 @@ const styles = computed(() => {
 });
 
 const dotStyles = computed(() => {
-    if (props.status === 'provisioning' || props.status === 'deploying') {
+    if (props.status === 'failed') {
+        return 'bg-red-500';
+    }
+
+    if (props.status === 'unverified') {
+        return 'bg-neutral-400';
+    }
+
+    if (
+        props.status === 'provisioning' ||
+        props.status === 'deploying' ||
+        props.status === 'pending_confirmation'
+    ) {
         return 'bg-amber-400';
     }
 

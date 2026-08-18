@@ -10,7 +10,7 @@ import {
 } from '@lucide/vue';
 import { Button } from '@/components/ui/button';
 import { currentSite } from '@/data/stacklab';
-import { show as serverShow } from '@/routes/servers';
+import { index as serversIndex } from '@/routes/servers';
 import { create as sitesCreate } from '@/routes/sites';
 
 defineOptions({
@@ -108,7 +108,7 @@ const deployLogs = [
             variant="outline"
             class="h-10 rounded-lg border-neutral-200 bg-white shadow-none"
         >
-            <Link :href="serverShow()">Back to fragrant-forest</Link>
+            <Link :href="serversIndex()">Back to servers</Link>
         </Button>
         <Button
             as-child

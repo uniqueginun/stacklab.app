@@ -1,15 +1,15 @@
 <script setup lang="ts">
-import { Head, Link } from '@inertiajs/vue3';
-import { ArrowLeft } from '@lucide/vue';
+import { Form, Head, Link } from '@inertiajs/vue3';
+import { ArrowLeft, Check, Circle, Cloud, Server } from '@lucide/vue';
 import { ref } from 'vue';
-import ServerAdvancedModal from '@/components/stacklab/ServerAdvancedModal.vue';
-import ServerCredentialsModal from '@/components/stacklab/ServerCredentialsModal.vue';
+import InputError from '@/components/InputError.vue';
 import StacklabMark from '@/components/stacklab/StacklabMark.vue';
-import StacklabSelect from '@/components/stacklab/StacklabSelect.vue';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { serverSizes } from '@/data/stacklab';
-import { index as serversIndex } from '@/routes/servers';
+import { Spinner } from '@/components/ui/spinner';
+import { index as serversIndex, store } from '@/routes/servers';
+import type { ServerProvider } from '@/types';
 
 defineOptions({
     layout: {
@@ -18,16 +18,27 @@ defineOptions({
     },
 });
 
-const type = ref('app');
-const region = ref('nyc1');
-const network = ref('managed');
-const size = ref('small');
-const showAdvanced = ref(false);
-const showCredentials = ref(false);
+const provider = ref<ServerProvider>('digitalocean');
+
+const providers = [
+    {
+        id: 'digitalocean' as const,
+        name: 'DigitalOcean',
+        description: 'Connect an existing droplet by IP and SSH credentials.',
+        icon: Cloud,
+    },
+    {
+        id: 'custom' as const,
+        name: 'Custom VPS',
+        description:
+            'Any provider — Hetzner, AWS, Vultr, Linode, or your own VM.',
+        icon: Server,
+    },
+];
 </script>
 
 <template>
-    <Head title="Create server" />
+    <Head title="Connect a server" />
 
     <div class="mx-auto max-w-2xl">
         <Link
@@ -38,102 +49,155 @@ const showCredentials = ref(false);
             Back
         </Link>
 
-        <div class="mb-6 flex items-center gap-3">
-            <StacklabMark class="size-9" />
-            <h1 class="text-2xl font-semibold tracking-tight">
-                Configure fragrant-forest
-            </h1>
+        <div class="mb-6 flex items-start gap-3">
+            <StacklabMark class="mt-0.5 size-9 shrink-0" />
+            <div>
+                <h1 class="text-2xl font-semibold tracking-tight">
+                    Connect a server
+                </h1>
+                <p class="mt-1 text-sm text-neutral-500">
+                    Connect an existing server you already have. stacklab.app
+                    will install Nginx, PHP, and your database over SSH.
+                </p>
+            </div>
         </div>
 
         <div
             class="rounded-2xl border border-neutral-200/80 bg-white p-6 md:p-8"
         >
-            <div class="grid gap-5">
+            <Form
+                v-bind="store.form()"
+                v-slot="{ errors, processing }"
+                class="grid gap-6"
+            >
                 <div class="grid gap-2">
                     <Label
-                        class="text-[11px] font-medium tracking-wider text-neutral-400 uppercase"
-                        >Type</Label
+                        for="name"
+                        class="text-sm font-normal text-neutral-500"
+                        >Server name</Label
                     >
-                    <StacklabSelect v-model="type">
-                        <option value="app">App server</option>
-                        <option value="worker">Worker server</option>
-                        <option value="database">Database server</option>
-                    </StacklabSelect>
+                    <Input
+                        id="name"
+                        name="name"
+                        type="text"
+                        required
+                        autofocus
+                        placeholder="e.g. fragrant-forest"
+                        class="h-11 rounded-lg border-neutral-200 bg-white shadow-none"
+                    />
+                    <InputError :message="errors.name" />
+                    <p class="text-sm text-neutral-400">
+                        A label to identify this server across stacklab.app.
+                    </p>
+                </div>
+
+                <div class="grid gap-2">
+                    <Label class="text-sm font-normal text-neutral-500"
+                        >Provider</Label
+                    >
+                    <input type="hidden" name="provider" :value="provider" />
+                    <div class="grid gap-3 sm:grid-cols-2">
+                        <button
+                            v-for="option in providers"
+                            :key="option.id"
+                            type="button"
+                            class="relative rounded-xl border p-4 text-left transition-colors"
+                            :class="
+                                provider === option.id
+                                    ? 'border-brand bg-orange-50'
+                                    : 'border-neutral-200 bg-white hover:bg-neutral-50'
+                            "
+                            @click="provider = option.id"
+                        >
+                            <component
+                                :is="provider === option.id ? Check : Circle"
+                                class="absolute top-3 right-3 size-4"
+                                :class="
+                                    provider === option.id
+                                        ? 'text-brand'
+                                        : 'text-neutral-300'
+                                "
+                            />
+                            <span
+                                class="mb-3 flex size-9 items-center justify-center rounded-lg bg-orange-50 text-brand"
+                            >
+                                <component :is="option.icon" class="size-4" />
+                            </span>
+                            <p class="font-medium">{{ option.name }}</p>
+                            <p class="mt-1 text-sm text-neutral-500">
+                                {{ option.description }}
+                            </p>
+                        </button>
+                    </div>
+                    <InputError :message="errors.provider" />
+                </div>
+
+                <div class="grid gap-2">
+                    <Label
+                        for="host"
+                        class="text-sm font-normal text-neutral-500"
+                        >Host</Label
+                    >
+                    <Input
+                        id="host"
+                        name="host"
+                        type="text"
+                        required
+                        placeholder="167.99.1.1"
+                        class="h-11 rounded-lg border-neutral-200 bg-white shadow-none"
+                    />
+                    <InputError :message="errors.host" />
+                    <p class="text-sm text-neutral-400">
+                        The public IP address or hostname of your server.
+                    </p>
                 </div>
 
                 <div class="grid gap-5 sm:grid-cols-2">
                     <div class="grid gap-2">
-                        <Label class="text-sm font-normal text-neutral-500"
-                            >Region</Label
+                        <Label
+                            for="ssh_user"
+                            class="text-sm font-normal text-neutral-500"
+                            >SSH user</Label
                         >
-                        <StacklabSelect v-model="region">
-                            <option value="nyc1">New York 1</option>
-                            <option value="sfo3">San Francisco 3</option>
-                            <option value="fsn1">Falkenstein 1</option>
-                        </StacklabSelect>
+                        <Input
+                            id="ssh_user"
+                            name="ssh_user"
+                            type="text"
+                            required
+                            placeholder="root"
+                            class="h-11 rounded-lg border-neutral-200 bg-white shadow-none"
+                        />
+                        <InputError :message="errors.ssh_user" />
                     </div>
                     <div class="grid gap-2">
-                        <Label class="text-sm font-normal text-neutral-500"
-                            >Private network</Label
+                        <Label
+                            for="ssh_port"
+                            class="text-sm font-normal text-neutral-500"
+                            >SSH port</Label
                         >
-                        <StacklabSelect v-model="network">
-                            <option value="managed">Stacklab managed</option>
-                            <option value="none">None</option>
-                        </StacklabSelect>
-                    </div>
-                </div>
-
-                <div>
-                    <div class="mb-3 flex items-center justify-between">
-                        <p class="font-medium">Server size</p>
-                        <button type="button" class="text-sm text-brand">
-                            Show more sizes
-                        </button>
-                    </div>
-                    <div class="space-y-2">
-                        <button
-                            v-for="tier in serverSizes"
-                            :key="tier.id"
-                            type="button"
-                            class="flex w-full items-center gap-3 rounded-xl border px-4 py-3 text-left transition-colors"
-                            :class="
-                                size === tier.id
-                                    ? 'border-brand bg-orange-50'
-                                    : 'border-neutral-200 bg-white hover:bg-neutral-50'
-                            "
-                            @click="size = tier.id"
-                        >
-                            <StacklabMark class="size-8" />
-                            <div class="min-w-0 flex-1">
-                                <p class="font-medium">{{ tier.name }}</p>
-                                <p class="text-sm text-neutral-500">
-                                    {{ tier.specs }}
-                                </p>
-                            </div>
-                            <p class="text-sm font-medium">{{ tier.price }}</p>
-                        </button>
-                    </div>
-                    <div class="mt-3 flex justify-end">
-                        <button
-                            type="button"
-                            class="text-sm text-brand"
-                            @click="showAdvanced = true"
-                        >
-                            Advanced settings
-                        </button>
+                        <Input
+                            id="ssh_port"
+                            name="ssh_port"
+                            type="number"
+                            required
+                            min="1"
+                            max="65535"
+                            default-value="22"
+                            class="h-11 rounded-lg border-neutral-200 bg-white shadow-none"
+                        />
+                        <InputError :message="errors.ssh_port" />
                     </div>
                 </div>
 
                 <Button
+                    type="submit"
                     class="h-11 w-full rounded-lg bg-neutral-950 text-white hover:bg-neutral-800"
-                    @click="showCredentials = true"
+                    :disabled="processing"
                 >
-                    Create server
+                    <Spinner v-if="processing" />
+                    Connect server
                 </Button>
-            </div>
+            </Form>
         </div>
     </div>
-
-    <ServerAdvancedModal v-model:open="showAdvanced" />
-    <ServerCredentialsModal v-model:open="showCredentials" />
 </template>
