@@ -1,132 +1,120 @@
 <script setup lang="ts">
-import { Head, Link } from '@inertiajs/vue3';
-import {
-    ArrowUpFromLine,
-    CheckCircle2,
-    Clock,
-    GitBranch,
-    MousePointer2,
-    Sparkles,
-} from '@lucide/vue';
-import { Button } from '@/components/ui/button';
-import { currentSite } from '@/data/stacklab';
-import { index as serversIndex } from '@/routes/servers';
-import { create as sitesCreate } from '@/routes/sites';
+import { Head, Link, setLayoutProps } from '@inertiajs/vue3';
+import { ArrowLeft, Globe } from '@lucide/vue';
+import { computed, watchEffect } from 'vue';
+import SiteCommandsPanel from '@/components/stacklab/SiteCommandsPanel.vue';
+import SiteDeploymentsPanel from '@/components/stacklab/SiteDeploymentsPanel.vue';
+import SiteEnvironmentPanel from '@/components/stacklab/SiteEnvironmentPanel.vue';
+import SiteInfoPanel from '@/components/stacklab/SiteInfoPanel.vue';
+import SiteSourceControlPanel from '@/components/stacklab/SiteSourceControlPanel.vue';
+import StatusBadge from '@/components/stacklab/StatusBadge.vue';
+import { show as serverShow } from '@/routes/servers';
+import { index as sitesIndex } from '@/routes/sites';
+import type {
+    GitHubAccount,
+    ServerOperation,
+    SiteRelease,
+    SiteShow,
+} from '@/types';
 
 defineOptions({
     layout: {
         nav: 'site',
-        workspace: 'chirper.on-stacklab.app',
-        activeTab: 'deployments',
+        activeTab: 'info',
     },
 });
 
-const buildLogs = [
-    { text: '=> Warming up deployment workers', accent: false },
-    {
-        text: '=> Preparing to build site chirper.on-stacklab.app for commit 48dc5d5d9886b430307674a4390726666f474e0b',
-        accent: false,
-    },
-    { text: '=> Zero downtime deployments enabled', accent: true },
-    { text: '=> Build ready to be deployed', accent: true },
-];
+const props = defineProps<{
+    site: SiteShow;
+    tab: 'info' | 'source' | 'deployments' | 'environment' | 'commands';
+    github: GitHubAccount;
+    operation: ServerOperation | null;
+    releases: SiteRelease[];
+}>();
 
-const deployLogs = [
-    '- Installing league/config (v1.2.0): Extracting archive',
-    '- Installing league/commonmark (2.9.0): Extracting archive',
-    '  0/77 [>---------------------------]   0%',
-    ' 20/77 [=======---------------------]  25%',
-    ' 48/77 [=================>----------]  62%',
-];
+watchEffect(() => {
+    setLayoutProps({
+        nav: 'site',
+        workspace: props.site.domain,
+        activeTab: props.tab,
+        siteUuid: props.site.uuid,
+        siteIsPhp: props.site.is_php,
+        siteIsLaravel: props.site.is_laravel,
+    });
+});
+
+const pageTitle = computed(() => {
+    if (props.tab === 'deployments') {
+        return `Deployments · ${props.site.domain}`;
+    }
+
+    if (props.tab === 'source') {
+        return `Source control · ${props.site.domain}`;
+    }
+
+    if (props.tab === 'environment') {
+        return `Environment · ${props.site.domain}`;
+    }
+
+    if (props.tab === 'commands') {
+        return `Commands · ${props.site.domain}`;
+    }
+
+    return props.site.domain;
+});
 </script>
 
 <template>
-    <Head title="Deployment details" />
+    <Head :title="pageTitle" />
 
-    <div class="mb-6">
-        <h1 class="text-2xl font-semibold tracking-tight">
-            Deployment details · {{ currentSite.commit }}
-        </h1>
-        <div
-            class="mt-3 flex flex-wrap items-center gap-x-5 gap-y-2 text-sm text-neutral-600"
-        >
-            <span class="inline-flex items-center gap-1.5">
-                <span
-                    class="flex size-5 items-center justify-center rounded-full bg-orange-50 text-brand"
-                >
-                    <ArrowUpFromLine class="size-3" />
-                </span>
-                Deploying
-            </span>
-            <span class="inline-flex items-center gap-1.5">
-                <MousePointer2 class="size-3.5 text-neutral-400" />
-                Manual
-            </span>
-            <span class="inline-flex items-center gap-1.5">
-                <GitBranch class="size-3.5 text-neutral-400" />
-                stylize this
-            </span>
-            <span class="inline-flex items-center gap-1.5">
-                <Clock class="size-3.5 text-neutral-400" />
-                Just now
-            </span>
-            <span
-                class="inline-flex items-center gap-1.5 rounded-full bg-orange-50 px-2.5 py-1 text-xs font-medium text-orange-700"
+    <div class="mb-6 flex items-start justify-between gap-4">
+        <div>
+            <Link
+                :href="sitesIndex()"
+                class="mb-3 inline-flex items-center gap-1 text-sm text-neutral-500 hover:text-neutral-900"
             >
-                <span class="size-1.5 rounded-full bg-brand" />
-                Deploying
-            </span>
+                <ArrowLeft class="size-4" />
+                Sites
+            </Link>
+            <div class="flex items-center gap-3">
+                <span
+                    class="flex size-10 items-center justify-center rounded-full bg-orange-50 text-brand"
+                >
+                    <Globe class="size-4" />
+                </span>
+                <div>
+                    <h1 class="text-2xl font-semibold tracking-tight">
+                        {{ site.domain }}
+                    </h1>
+                    <p class="mt-0.5 text-sm text-neutral-500">
+                        {{ site.type }} ·
+                        <Link
+                            :href="serverShow(site.server.uuid)"
+                            class="hover:text-neutral-900"
+                        >
+                            {{ site.server.name }}
+                        </Link>
+                        · {{ site.server.host }}
+                    </p>
+                </div>
+            </div>
         </div>
+        <StatusBadge :status="site.status" :label="site.status_label" />
     </div>
 
-    <div class="grid gap-5">
-        <section class="rounded-2xl border border-neutral-200/80 bg-white p-5">
-            <div class="mb-3 flex items-center gap-2 font-medium">
-                <CheckCircle2 class="size-4 text-neutral-400" />
-                Build logs
-            </div>
-            <pre
-                class="overflow-x-auto rounded-xl bg-neutral-50 p-4 font-mono text-xs leading-6 text-neutral-700"
-            ><span v-for="line in buildLogs" :key="line.text" :class="line.accent ? 'text-brand' : ''">{{ line.text }}
-</span></pre>
-        </section>
-
-        <section class="rounded-2xl border border-neutral-200/80 bg-white p-5">
-            <div class="mb-3 flex items-center gap-2 font-medium">
-                <Sparkles class="size-4 text-neutral-400" />
-                Deployment logs
-            </div>
-            <pre
-                class="overflow-x-auto rounded-xl bg-neutral-50 p-4 font-mono text-xs leading-6 text-neutral-700"
-                >{{ deployLogs.join('\n') }}</pre>
-        </section>
-    </div>
-
-    <div class="mt-6 flex flex-wrap gap-3">
-        <Button
-            as-child
-            variant="outline"
-            class="h-10 rounded-lg border-neutral-200 bg-white shadow-none"
-        >
-            <Link :href="serversIndex()">Back to servers</Link>
-        </Button>
-        <Button
-            as-child
-            class="h-10 rounded-lg bg-neutral-950 text-white hover:bg-neutral-800"
-        >
-            <Link :href="sitesCreate()">Create another site</Link>
-        </Button>
-    </div>
-
-    <div
-        class="fixed bottom-6 left-1/2 z-40 flex -translate-x-1/2 items-center gap-2 rounded-full bg-neutral-800 px-4 py-2 text-sm text-white shadow-lg"
-    >
-        <span class="size-2 animate-pulse rounded-full bg-brand" />
-        <span>
-            Deploying
-            <strong>{{ currentSite.commit }}</strong>
-            on
-            <strong>{{ currentSite.domain }}</strong>
-        </span>
-    </div>
+    <SiteInfoPanel v-if="tab === 'info'" :site="site" />
+    <SiteSourceControlPanel
+        v-else-if="tab === 'source'"
+        :site="site"
+        :github="github"
+    />
+    <SiteEnvironmentPanel v-else-if="tab === 'environment'" :site="site" />
+    <SiteCommandsPanel v-else-if="tab === 'commands'" :site="site" />
+    <SiteDeploymentsPanel
+        v-else-if="tab === 'deployments'"
+        :site="site"
+        :github="github"
+        :operation="operation"
+        :releases="releases"
+    />
 </template>

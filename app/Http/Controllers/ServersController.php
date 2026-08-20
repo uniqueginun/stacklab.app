@@ -3,9 +3,13 @@
 namespace App\Http\Controllers;
 
 use App\Http\Requests\ServerStoreRequest;
+use App\Http\Resources\OperationResource;
 use App\Http\Resources\ServerIndexResource;
 use App\Http\Resources\ServerShowResource;
+use App\Http\Resources\SitesIndexResource;
 use App\Models\Server;
+use App\Models\Site;
+use App\Support\ProvisioningProfiles;
 use Illuminate\Http\RedirectResponse;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -50,7 +54,7 @@ class ServersController extends Controller
     /**
      * Display the specified resource.
      */
-    public function show(Server $server): Response
+    public function show(Server $server, ProvisioningProfiles $profiles): Response
     {
         abort_unless($server->user_id === auth()->id(), 403);
 
@@ -62,10 +66,26 @@ class ServersController extends Controller
             ? str($candidate['key'])->before(' ')->toString()
             : null;
 
+        $operation = $server->operations()
+            ->where('type', 'provision')
+            ->with(['steps' => fn ($query) => $query->orderBy('position')])
+            ->latest()
+            ->first();
+
+        $sites = $server->sites()->latest()->get();
+        $sites->each(fn (Site $site) => $site->setRelation('server', $server));
+
         return inertia('servers/Show', [
             'server' => (new ServerShowResource($server))->resolve(),
+            'profiles' => $profiles->options(),
+            'operation' => $operation !== null
+                ? (new OperationResource($operation))->resolve()
+                : null,
             'sshFingerprint' => $fingerprint,
             'sshHostKeyType' => $hostKeyType,
+            'sites' => SitesIndexResource::collection($sites)->resolve(),
+            'tab' => 'overview',
+            'databases' => [],
         ]);
     }
 

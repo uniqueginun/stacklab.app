@@ -1,0 +1,102 @@
+export type SiteCreateServer = {
+    uuid: string;
+    name: string;
+    host: string;
+    os_label: string | null;
+};
+
+export type SiteStatus = 'pending' | 'deploying' | 'deployed' | 'failed';
+
+export type DeploymentOptions = {
+    run_composer: boolean;
+    run_npm: boolean;
+    run_migrations: boolean;
+    run_caches: boolean;
+    run_queue_restart: boolean;
+    run_hook: boolean;
+};
+
+export type SiteIndex = {
+    uuid: string;
+    domain: string;
+    type: string;
+    status: SiteStatus;
+    status_label: string;
+    web_directory: string | null;
+    repository_url: string | null;
+    repository_branch: string | null;
+    server: {
+        uuid: string;
+        name: string;
+    };
+};
+
+export type SiteShow = SiteIndex & {
+    server: {
+        uuid: string;
+        name: string;
+        host: string;
+    };
+    is_laravel: boolean;
+    is_php: boolean;
+    deployment_options: DeploymentOptions | null;
+    php_version: string | null;
+    root_path: string | null;
+    last_deployed_at: string | null;
+    created_at: string | null;
+    current_release: {
+        uuid: string;
+        commit_sha: string;
+        short_sha: string;
+        commit_message: string | null;
+    } | null;
+};
+
+export type SiteRelease = {
+    uuid: string;
+    commit_sha: string;
+    short_sha: string;
+    commit_message: string | null;
+    status: string;
+    status_label: string;
+    activated_at: string | null;
+    created_at: string | null;
+    is_current: boolean;
+    can_rollback: boolean;
+};
+
+export type GitHubAccount = {
+    connected: boolean;
+    username: string | null;
+};
+
+export type SiteEnvironmentFile = {
+    contents: string | null;
+    path: string;
+};
+
+export type SiteCommandResult = {
+    command: string;
+    working_directory: string;
+    exit_code: number;
+    output: string;
+};
+
+export type GitHubRepository = {
+    id: number;
+    full_name: string;
+    private: boolean;
+    default_branch: string;
+};
+
+export type GitHubBranch = {
+    name: string;
+};
+
+export type SiteRepositoryCatalog = {
+    githubConnected: boolean;
+    repository: string | null;
+    branch: string | null;
+    repositories: GitHubRepository[];
+    branches: GitHubBranch[];
+};

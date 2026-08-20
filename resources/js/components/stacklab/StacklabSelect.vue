@@ -4,7 +4,9 @@ import { cn } from '@/lib/utils';
 
 defineProps<{
     id?: string;
+    name?: string;
     modelValue: string;
+    disabled?: boolean;
     class?: string;
 }>();
 
@@ -17,10 +19,12 @@ const emit = defineEmits<{
     <div class="relative">
         <select
             :id="id"
+            :name="name"
             :value="modelValue"
+            :disabled="disabled"
             :class="
                 cn(
-                    'h-11 w-full appearance-none rounded-lg border border-neutral-200 bg-white px-3 pr-10 text-sm text-neutral-900 transition-colors outline-none focus:border-neutral-400',
+                    'h-11 w-full appearance-none rounded-lg border border-neutral-200 bg-white px-3 pr-10 text-sm text-neutral-900 transition-colors outline-none focus:border-neutral-400 disabled:cursor-not-allowed disabled:bg-neutral-50 disabled:text-neutral-400',
                     $props.class,
                 )
             "

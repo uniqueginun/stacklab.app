@@ -1,7 +1,10 @@
 <script setup lang="ts">
-import { Form, Head, Link, setLayoutProps } from '@inertiajs/vue3';
-import { ArrowLeft, LockKeyhole, Plus } from '@lucide/vue';
-import { ref, watchEffect } from 'vue';
+import { Form, Head, Link, setLayoutProps, usePoll } from '@inertiajs/vue3';
+import { ArrowLeft, Globe, LockKeyhole, Plus } from '@lucide/vue';
+import { computed, ref, watch, watchEffect } from 'vue';
+import ProvisionPanel from '@/components/stacklab/ProvisionPanel.vue';
+import ProvisionStepper from '@/components/stacklab/ProvisionStepper.vue';
+import ServerDatabasesPanel from '@/components/stacklab/ServerDatabasesPanel.vue';
 import SiteTypeModal from '@/components/stacklab/SiteTypeModal.vue';
 import SshSetupPanel from '@/components/stacklab/SshSetupPanel.vue';
 import StacklabMark from '@/components/stacklab/StacklabMark.vue';
@@ -19,7 +22,15 @@ import {
 } from '@/components/ui/dialog';
 import { Spinner } from '@/components/ui/spinner';
 import { destroy, index as serversIndex } from '@/routes/servers';
-import type { ServerShow } from '@/types';
+import { show as siteShow } from '@/routes/sites';
+import type {
+    ProvisioningProfileOption,
+    ServerDatabase,
+    ServerOperation,
+    ServerShow,
+    ServerShowTab,
+    SiteIndex,
+} from '@/types';
 
 defineOptions({
     layout: {
@@ -28,33 +39,101 @@ defineOptions({
     },
 });
 
-const props = defineProps<{
-    server: ServerShow;
-    sshFingerprint: string | null;
-    sshHostKeyType: string | null;
-}>();
+const props = withDefaults(
+    defineProps<{
+        server: ServerShow;
+        profiles: ProvisioningProfileOption[];
+        operation: ServerOperation | null;
+        sshFingerprint: string | null;
+        sshHostKeyType: string | null;
+        sites: SiteIndex[];
+        tab?: ServerShowTab;
+        databases?: ServerDatabase[];
+    }>(),
+    {
+        tab: 'overview',
+        databases: () => [],
+    },
+);
 
 watchEffect(() => {
     setLayoutProps({
         nav: 'server',
         workspace: props.server.name,
-        activeTab: 'overview',
+        activeTab: props.tab,
         serverUuid: props.server.uuid,
     });
 });
 
 const showSiteTypes = ref(false);
+
+const isProvisioning = computed(
+    () =>
+        props.tab === 'overview' &&
+        (props.operation?.status === 'pending' ||
+            props.operation?.status === 'running'),
+);
+
+const badgeStatus = computed(() =>
+    isProvisioning.value ? 'provisioning' : props.server.connection_status,
+);
+
+const showStepper = computed(
+    () => props.tab === 'overview' && props.operation !== null,
+);
+const showProvisionForm = computed(
+    () =>
+        props.tab === 'overview' &&
+        props.server.can_provision &&
+        !isProvisioning.value,
+);
+
+const shouldPoll = computed(
+    () =>
+        props.operation?.status === 'pending' ||
+        props.operation?.status === 'running' ||
+        (props.tab === 'databases' &&
+            props.databases.some((database) => database.status === 'pending')),
+);
+
+const { start, stop } = usePoll(
+    2000,
+    {
+        only: ['server', 'operation', 'databases'],
+    },
+    {
+        autoStart: false,
+    },
+);
+
+watch(
+    shouldPoll,
+    (active) => {
+        if (active) {
+            start();
+
+            return;
+        }
+
+        stop();
+    },
+    { immediate: true },
+);
 </script>
 
 <template>
-    <Head :title="server.name" />
+    <Head
+        :title="
+            tab === 'databases' ? `Databases · ${server.name}` : server.name
+        "
+    />
 
     <Link
         :href="serversIndex()"
         class="mb-6 inline-flex items-center gap-1 text-sm text-neutral-500 hover:text-neutral-900"
     >
         <ArrowLeft class="size-4" />
-        Back
+        Servers
     </Link>
 
     <div class="flex items-start justify-between gap-4">
@@ -70,7 +149,7 @@ const showSiteTypes = ref(false);
             </div>
         </div>
         <div class="flex items-center gap-3">
-            <StatusBadge :status="server.connection_status" />
+            <StatusBadge :status="badgeStatus" />
             <Dialog>
                 <DialogTrigger as-child>
                     <Button
@@ -140,52 +219,123 @@ const showSiteTypes = ref(false);
     </div>
 
     <SshSetupPanel
-        v-if="!server.is_connected"
+        v-if="tab === 'overview' && !server.is_connected"
         :server="server"
         :fingerprint="sshFingerprint"
         :host-key-type="sshHostKeyType"
     />
 
-    <div id="sites" class="mt-10 flex items-center justify-between">
-        <h2 class="text-xl font-semibold">Sites</h2>
-        <Button
-            v-if="server.is_connected"
-            variant="outline"
-            class="h-9 rounded-lg border-neutral-200 bg-white shadow-none"
-            @click="showSiteTypes = true"
-        >
-            <Plus class="size-4" />
-            Create site
-        </Button>
+    <div v-else-if="tab === 'overview'" class="mt-8 space-y-4">
+        <ProvisionStepper
+            v-if="showStepper && operation"
+            :operation="operation"
+        />
+        <ProvisionPanel
+            v-if="showProvisionForm"
+            :server="server"
+            :profiles="profiles"
+        />
     </div>
 
-    <div
-        v-if="server.is_connected"
-        class="mt-4 rounded-xl border border-dashed border-neutral-200 bg-white px-6 py-12 text-center"
-    >
-        <p class="font-medium">No sites yet</p>
-        <p class="mt-1 text-sm text-neutral-500">
-            Create a site on this server when you are ready to deploy.
-        </p>
-    </div>
+    <template v-if="tab === 'overview'">
+        <div id="sites" class="mt-10 flex items-center justify-between">
+            <h2 class="text-xl font-semibold">Sites</h2>
+            <Button
+                v-if="server.is_provisioned"
+                variant="outline"
+                class="h-9 rounded-lg border-neutral-200 bg-white shadow-none"
+                @click="showSiteTypes = true"
+            >
+                <Plus class="size-4" />
+                Create site
+            </Button>
+        </div>
 
-    <div
-        v-else
-        class="mt-4 flex items-center gap-4 rounded-xl border border-neutral-200 bg-neutral-50 px-6 py-6"
-    >
-        <span
-            class="flex size-10 shrink-0 items-center justify-center rounded-full bg-neutral-200 text-neutral-600"
+        <div
+            v-if="sites.length > 0"
+            class="mt-4 overflow-hidden rounded-xl border border-neutral-200/80 bg-white"
         >
-            <LockKeyhole class="size-4" />
-        </span>
-        <div>
-            <p class="font-medium">Server actions are locked</p>
+            <Link
+                v-for="site in sites"
+                :key="site.uuid"
+                :href="siteShow(site.uuid)"
+                class="flex items-center gap-4 border-b border-neutral-100 px-5 py-4 last:border-b-0 hover:bg-neutral-50/80"
+            >
+                <span
+                    class="flex size-9 items-center justify-center rounded-full bg-orange-50 text-brand"
+                >
+                    <Globe class="size-4" />
+                </span>
+                <div class="min-w-0 flex-1">
+                    <p class="font-medium">{{ site.domain }}</p>
+                    <p class="text-sm text-neutral-500">
+                        {{ site.type }}
+                        <span v-if="site.repository_url">
+                            · {{ site.repository_url
+                            }}{{
+                                site.repository_branch
+                                    ? ` · ${site.repository_branch}`
+                                    : ''
+                            }}
+                        </span>
+                    </p>
+                </div>
+                <StatusBadge :status="site.status" :label="site.status_label" />
+            </Link>
+        </div>
+
+        <div
+            v-else-if="server.is_provisioned"
+            class="mt-4 rounded-xl border border-dashed border-neutral-200 bg-white px-6 py-12 text-center"
+        >
+            <p class="font-medium">No sites yet</p>
             <p class="mt-1 text-sm text-neutral-500">
-                Confirm the SSH connection above before creating sites or
-                provisioning this server.
+                Create a site on this server when you are ready to deploy.
             </p>
         </div>
-    </div>
 
-    <SiteTypeModal v-if="server.is_connected" v-model:open="showSiteTypes" />
+        <div
+            v-else
+            class="mt-4 flex items-center gap-4 rounded-xl border border-neutral-200 bg-neutral-50 px-6 py-6"
+        >
+            <span
+                class="flex size-10 shrink-0 items-center justify-center rounded-full bg-neutral-200 text-neutral-600"
+            >
+                <LockKeyhole class="size-4" />
+            </span>
+            <div>
+                <p class="font-medium">Server actions are locked</p>
+                <p class="mt-1 text-sm text-neutral-500">
+                    {{
+                        server.is_connected
+                            ? 'Provision this server before creating sites.'
+                            : 'Confirm the SSH connection above before creating sites or provisioning this server.'
+                    }}
+                </p>
+            </div>
+        </div>
+
+        <SiteTypeModal
+            v-if="server.is_provisioned"
+            v-model:open="showSiteTypes"
+            :server-uuid="server.uuid"
+        />
+    </template>
+
+    <template v-if="tab === 'databases'">
+        <div
+            v-if="
+                operation &&
+                ['pending', 'running', 'failed'].includes(operation.status)
+            "
+            class="mt-8"
+        >
+            <ProvisionStepper :operation="operation" />
+        </div>
+        <ServerDatabasesPanel
+            :server="server"
+            :databases="databases"
+            :operation="operation"
+        />
+    </template>
 </template>

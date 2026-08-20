@@ -4,6 +4,9 @@ set -euo pipefail
 # Non-login SSH shells often omit sbin; Debian packages like nginx live there.
 export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:${PATH:-}"
 
+# Git/composer/npm inherit this umask. 077 makes release files unreadable by www-data.
+umask 022
+
 mini_forge_on_error() {
     local exit_code=$?
     trap - ERR
@@ -207,4 +210,111 @@ mini_forge_ensure_composer() {
     rm -f "$installer"
     sudo -n mv /tmp/composer.phar /usr/local/bin/composer
     sudo -n chmod 755 /usr/local/bin/composer
+}
+
+mini_forge_disable_default_nginx_site() {
+    sudo -n rm -f /etc/nginx/sites-enabled/default
+}
+
+# Restart nginx after writing a vhost. Reload can succeed while the Ubuntu
+# default site still answers until the master process is replaced.
+mini_forge_reload_nginx() {
+    if sudo -n systemctl restart nginx; then
+        return 0
+    fi
+
+    sudo -n nginx -s reload
+}
+
+mini_forge_ensure_parent_traverse() {
+    local path="$1"
+
+    while [[ "${path}" != "/" && -n "${path}" ]]; do
+        sudo -n chmod a+x "${path}" || true
+        path="$(dirname "${path}")"
+    done
+}
+
+mini_forge_www_data_group_exists() {
+    mini_forge_has_cmd getent && getent group www-data >/dev/null
+}
+
+# php-fpm (www-data) must own-or-group-write these trees. Laravel's Filesystem::replace()
+# calls tempnam() in the target directory; if that dir isn't writable PHP 8.4+ raises
+# "tempnam(): file created in the system's temporary directory" as an ErrorException.
+mini_forge_make_fpm_writable() {
+    local path="$1"
+    local ssh_user="${2:-}"
+
+    [[ -e "${path}" ]] || return 0
+
+    if mini_forge_www_data_group_exists; then
+        if [[ -n "${ssh_user}" ]]; then
+            sudo -n chown -R "${ssh_user}:www-data" "${path}" || sudo -n chgrp -R www-data "${path}" || true
+        else
+            sudo -n chgrp -R www-data "${path}" || true
+        fi
+        if mini_forge_has_cmd setfacl; then
+            sudo -n setfacl -R -m u:www-data:rwx -m d:u:www-data:rwx "${path}" || true
+        fi
+    fi
+
+    sudo -n chmod -R ug+rwX "${path}" || true
+    sudo -n find "${path}" -type d -exec chmod 2775 {} + 2>/dev/null || true
+}
+
+# www-data must read the release and write storage/bootstrap/cache.
+# Never chmod -R the site root — that opens .ssh keys.
+mini_forge_ensure_www_data_readable() {
+    local root="$1"
+    local release="${2:-}"
+    local ssh_user="${3:-${MF_SSH_USER:-}}"
+
+    sudo -n chmod 755 "${root}" || true
+    mini_forge_ensure_parent_traverse "${root}"
+
+    if [[ -n "${release}" && -d "${release}" ]]; then
+        sudo -n chmod -R a+rX "${release}"
+        sudo -n mkdir -p "${release}/bootstrap/cache"
+        mini_forge_make_fpm_writable "${release}/bootstrap/cache" "${ssh_user}"
+    fi
+
+    sudo -n mkdir -p \
+        "${root}/shared/storage/app/public" \
+        "${root}/shared/storage/framework/cache/data" \
+        "${root}/shared/storage/framework/sessions" \
+        "${root}/shared/storage/framework/views" \
+        "${root}/shared/storage/logs"
+
+    mini_forge_make_fpm_writable "${root}/shared/storage" "${ssh_user}"
+
+    if [[ -f "${root}/shared/.env" ]]; then
+        sudo -n chmod 640 "${root}/shared/.env" || true
+        if mini_forge_www_data_group_exists; then
+            if [[ -n "${ssh_user}" ]]; then
+                sudo -n chown "${ssh_user}:www-data" "${root}/shared/.env" || sudo -n chgrp www-data "${root}/shared/.env" || true
+            else
+                sudo -n chgrp www-data "${root}/shared/.env" || true
+            fi
+        fi
+    fi
+
+    if [[ -f "${root}/shared/database.sqlite" ]]; then
+        sudo -n chmod 660 "${root}/shared/database.sqlite" || true
+        if mini_forge_www_data_group_exists; then
+            if [[ -n "${ssh_user}" ]]; then
+                sudo -n chown "${ssh_user}:www-data" "${root}/shared/database.sqlite" || sudo -n chgrp www-data "${root}/shared/database.sqlite" || true
+            else
+                sudo -n chgrp www-data "${root}/shared/database.sqlite" || true
+            fi
+        fi
+    fi
+
+    if [[ -d "${root}/.ssh" ]]; then
+        sudo -n chmod 700 "${root}/.ssh"
+        sudo -n chmod 600 "${root}/.ssh/"* 2>/dev/null || true
+        if [[ -n "${ssh_user}" ]]; then
+            sudo -n chown -R "${ssh_user}:${ssh_user}" "${root}/.ssh" || true
+        fi
+    fi
 }

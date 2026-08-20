@@ -2,9 +2,13 @@
 
 namespace App\Providers;
 
+use App\Operations\Aftermath\FinalizeDatabaseAftermath;
+use App\Operations\Aftermath\FinalizeSiteAftermath;
+use App\Support\StepAftermathRegistry;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Validation\Rules\Password;
 
@@ -15,7 +19,14 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        //
+        $this->app->tag([
+            FinalizeSiteAftermath::class,
+            FinalizeDatabaseAftermath::class,
+        ], 'operation.step_aftermaths');
+
+        $this->app->singleton(StepAftermathRegistry::class, function ($app): StepAftermathRegistry {
+            return new StepAftermathRegistry($app->tagged('operation.step_aftermaths'));
+        });
     }
 
     /**
@@ -24,6 +35,7 @@ class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {
         $this->configureDefaults();
+        $this->configureHttp();
     }
 
     /**
@@ -46,5 +58,16 @@ class AppServiceProvider extends ServiceProvider
                 ->uncompromised()
             : null,
         );
+    }
+
+    protected function configureHttp(): void
+    {
+        Http::macro('github', function (string $token) {
+            return Http::baseUrl('https://api.github.com')
+                ->acceptJson()
+                ->withToken($token)
+                ->timeout(10)
+                ->connectTimeout(3);
+        });
     }
 }

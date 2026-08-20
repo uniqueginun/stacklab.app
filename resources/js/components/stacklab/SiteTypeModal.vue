@@ -6,49 +6,43 @@ import {
     DialogDescription,
     DialogTitle,
 } from '@/components/ui/dialog';
+import { siteTypes, type SiteType } from '@/data/stacklab';
 import { create as sitesCreate } from '@/routes/sites';
 
 const props = withDefaults(
     defineProps<{
         open: boolean;
-        selected?: string;
+        selected?: SiteType;
         redirect?: boolean;
+        serverUuid?: string;
     }>(),
     {
         selected: 'Laravel',
         redirect: true,
+        serverUuid: '',
     },
 );
 
 const emit = defineEmits<{
     'update:open': [value: boolean];
-    select: [type: string];
+    select: [type: SiteType];
 }>();
-
-const groups = [
-    {
-        category: 'PHP',
-        items: [
-            'Laravel',
-            'Symfony',
-            'Statamic',
-            'WordPress',
-            'phpMyAdmin',
-            'PHP',
-        ],
-    },
-    { category: 'JavaScript', items: ['Next.js', 'Nuxt.js'] },
-    { category: 'Static', items: ['HTML'] },
-];
 
 const initials = (name: string) => name.slice(0, 2);
 
-const choose = (type: string) => {
+const choose = (type: SiteType) => {
     emit('select', type);
     emit('update:open', false);
 
     if (props.redirect) {
-        router.visit(sitesCreate());
+        router.visit(
+            sitesCreate({
+                query: {
+                    type,
+                    ...(props.serverUuid ? { server: props.serverUuid } : {}),
+                },
+            }),
+        );
     }
 };
 </script>
@@ -69,7 +63,7 @@ const choose = (type: string) => {
             </div>
 
             <div class="mt-6 max-h-[420px] space-y-5 overflow-y-auto pr-1">
-                <div v-for="group in groups" :key="group.category">
+                <div v-for="group in siteTypes" :key="group.category">
                     <p
                         class="mb-2 text-[11px] font-medium tracking-wider text-neutral-400 uppercase"
                     >

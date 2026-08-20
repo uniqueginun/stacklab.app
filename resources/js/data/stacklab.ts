@@ -133,18 +133,22 @@ export const serverSizes = [
 export const siteTypes = [
     {
         category: 'PHP',
-        items: [
-            'Laravel',
-            'Symfony',
-            'Statamic',
-            'WordPress',
-            'phpMyAdmin',
-            'PHP',
-        ],
+        items: ['Laravel', 'PHP'],
     },
-    { category: 'JavaScript', items: ['Next.js', 'Nuxt.js'] },
     { category: 'Static', items: ['HTML'] },
 ] as const;
+
+export type SiteType = (typeof siteTypes)[number]['items'][number];
+
+export const phpSiteTypes: SiteType[] = ['Laravel', 'PHP'];
+
+export const isSiteType = (
+    value: string | null | undefined,
+): value is SiteType =>
+    value === 'Laravel' || value === 'PHP' || value === 'HTML';
+
+export const isPhpSiteType = (type: SiteType): boolean =>
+    phpSiteTypes.includes(type);
 
 export const currentServer = servers[0];
 export const currentSite = sites[0];

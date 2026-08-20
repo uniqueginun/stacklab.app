@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { Link, usePage } from '@inertiajs/vue3';
 import type { InertiaLinkProps } from '@inertiajs/vue3';
-import { ChevronsUpDown, Search } from '@lucide/vue';
 import { computed } from 'vue';
 import StacklabMark from '@/components/stacklab/StacklabMark.vue';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -15,9 +14,19 @@ import { Toaster } from '@/components/ui/sonner';
 import UserMenuContent from '@/components/UserMenuContent.vue';
 import { useCurrentUrl } from '@/composables/useCurrentUrl';
 import { getInitials } from '@/composables/useInitials';
-import { login, register } from '@/routes';
-import { index as serversIndex, show as serverShow } from '@/routes/servers';
-import { index as sitesIndex } from '@/routes/sites';
+import {
+    databases as serverDatabases,
+    index as serversIndex,
+    show as serverShow,
+} from '@/routes/servers';
+import {
+    commands as siteCommands,
+    deployments as siteDeployments,
+    environment as siteEnvironment,
+    index as sitesIndex,
+    show as siteShow,
+    source as siteSource,
+} from '@/routes/sites';
 
 export type StacklabNav = 'app' | 'server' | 'site' | 'none';
 
@@ -27,12 +36,18 @@ const props = withDefaults(
         workspace?: string;
         activeTab?: string;
         serverUuid?: string;
+        siteUuid?: string;
+        siteIsPhp?: boolean;
+        siteIsLaravel?: boolean;
     }>(),
     {
         nav: 'app',
         workspace: 'Personal',
         activeTab: '',
         serverUuid: '',
+        siteUuid: '',
+        siteIsPhp: false,
+        siteIsLaravel: false,
     },
 );
 
@@ -49,8 +64,6 @@ const initials = computed(() => {
 const appTabs = computed(() => [
     { label: 'Servers', href: serversIndex() },
     { label: 'Sites', href: sitesIndex() },
-    { label: 'Login', href: login() },
-    { label: 'Register', href: register() },
 ]);
 
 const serverTabs = computed(() => {
@@ -64,15 +77,47 @@ const serverTabs = computed(() => {
     return [
         { label: 'Overview', href: overview, key: 'overview' },
         { label: 'Sites', href: sites, key: 'sites' },
-        { label: 'Servers', href: serversIndex(), key: 'servers' },
+        {
+            label: 'Databases',
+            href: props.serverUuid
+                ? serverDatabases(props.serverUuid)
+                : serversIndex(),
+            key: 'databases',
+        },
     ];
 });
 
-const siteTabs = computed(() => [
-    { label: 'Overview', href: '/sites/chirper', key: 'overview' },
-    { label: 'Deployments', href: '/sites/chirper', key: 'deployments' },
-    { label: 'Servers', href: serversIndex().url, key: 'servers' },
-]);
+const siteTabs = computed(() => {
+    const info = props.siteUuid ? siteShow(props.siteUuid) : sitesIndex();
+    const source = props.siteUuid ? siteSource(props.siteUuid) : sitesIndex();
+    const deployments = props.siteUuid
+        ? siteDeployments(props.siteUuid)
+        : sitesIndex();
+
+    const tabs = [
+        { label: 'Site info', href: info, key: 'info' },
+        { label: 'Source control', href: source, key: 'source' },
+        { label: 'Deployments', href: deployments, key: 'deployments' },
+    ];
+
+    if (props.siteIsPhp && props.siteUuid) {
+        tabs.push({
+            label: 'Environment',
+            href: siteEnvironment(props.siteUuid),
+            key: 'environment',
+        });
+    }
+
+    if (props.siteIsLaravel && props.siteUuid) {
+        tabs.push({
+            label: 'Commands',
+            href: siteCommands(props.siteUuid),
+            key: 'commands',
+        });
+    }
+
+    return tabs;
+});
 
 const isTabActive = (
     label: string,
@@ -98,28 +143,13 @@ const isTabActive = (
                     <span>stacklab.app</span>
                 </Link>
 
-                <button
-                    type="button"
-                    class="inline-flex items-center gap-1.5 rounded-full border border-neutral-200 bg-[#F9F9F7] px-3 py-1 text-sm text-neutral-700"
+                <span
+                    class="inline-flex items-center rounded-full border border-neutral-200 bg-[#F9F9F7] px-3 py-1 text-sm text-neutral-700"
                 >
                     {{ workspace }}
-                    <ChevronsUpDown class="size-3.5 text-neutral-400" />
-                </button>
+                </span>
 
-                <div
-                    class="ml-auto flex max-w-md flex-1 items-center justify-end gap-3"
-                >
-                    <div
-                        class="hidden h-10 w-full max-w-sm items-center rounded-full border border-neutral-200 bg-[#F9F9F7] px-3 text-sm text-neutral-400 sm:flex"
-                    >
-                        <Search class="mr-2 size-4" />
-                        <span class="flex-1">Search</span>
-                        <kbd
-                            class="rounded-md border border-neutral-200 bg-white px-1.5 py-0.5 text-[10px] text-neutral-500"
-                            >⌘ K</kbd
-                        >
-                    </div>
-
+                <div class="ml-auto flex items-center justify-end gap-3">
                     <DropdownMenu v-if="auth.user">
                         <DropdownMenuTrigger :as-child="true">
                             <Button
@@ -145,12 +175,6 @@ const isTabActive = (
                             <UserMenuContent :user="auth.user" />
                         </DropdownMenuContent>
                     </DropdownMenu>
-                    <div
-                        v-else
-                        class="flex size-9 items-center justify-center rounded-full bg-neutral-950 text-xs font-medium text-white"
-                    >
-                        {{ initials }}
-                    </div>
                 </div>
             </div>
         </header>
@@ -205,14 +229,14 @@ const isTabActive = (
                         :href="tab.href"
                         class="relative py-3 text-sm text-neutral-500 transition-colors hover:text-neutral-950"
                         :class="
-                            (activeTab || 'deployments') === tab.key
+                            (activeTab || 'info') === tab.key
                                 ? 'font-medium text-neutral-950'
                                 : ''
                         "
                     >
                         {{ tab.label }}
                         <span
-                            v-if="(activeTab || 'deployments') === tab.key"
+                            v-if="(activeTab || 'info') === tab.key"
                             class="absolute inset-x-0 -bottom-px h-0.5 bg-neutral-950"
                         />
                     </Link>

@@ -4,6 +4,7 @@ use App\Enums\ConnectionStatus;
 use App\Models\Server;
 use App\Models\User;
 use App\Ssh\HostFingerprint;
+use App\Ssh\SshResult;
 use App\Ssh\SshService;
 use Inertia\Testing\AssertableInertia as Assert;
 
@@ -94,7 +95,15 @@ test('confirming a matching fingerprint stores the ssh host and unlocks the serv
         ->withArgs(fn (Server $argument, HostFingerprint $fingerprint) => $argument->is($server)
             && $fingerprint->key === $host->key
             && $fingerprint->fingerprint === $host->fingerprint)
-        ->andReturn(['os' => 'ubuntu', 'os_version' => '24.04']);
+        ->andReturn(['os' => 'ubuntu', 'os_version' => '24.04'])
+        ->shouldReceive('run')
+        ->once()
+        ->andReturn(new SshResult(0, json_encode([
+            'data' => [
+                'os' => 'ubuntu',
+                'os_version' => '24.04',
+            ],
+        ])));
 
     $this->actingAs($user)
         ->withSession([

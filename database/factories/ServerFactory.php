@@ -29,4 +29,34 @@ class ServerFactory extends Factory
             'connection_status' => ConnectionStatus::UNVERIFIED,
         ];
     }
+
+    /**
+     * @param  array<string, mixed>|null  $serverInfo
+     */
+    public function connected(?array $serverInfo = null): static
+    {
+        return $this->state(fn (): array => [
+            'connection_status' => ConnectionStatus::CONNECTED,
+            'ssh_public_key' => 'ssh-ed25519 public-key stacklab',
+            'ssh_private_key' => 'private-key',
+            'host_key' => 'ssh-ed25519 host-key',
+            'host_key_fingerprint' => 'SHA256:host-fingerprint',
+            'verified_at' => now(),
+            'server_info' => $serverInfo ?? [
+                'os' => 'ubuntu',
+                'os_version' => '24.04',
+                'os_pretty' => 'Ubuntu 24.04 LTS',
+            ],
+        ]);
+    }
+
+    /**
+     * @param  array<string, mixed>|null  $serverInfo
+     */
+    public function provisioned(string $profile = 'php', ?array $serverInfo = null): static
+    {
+        return $this->connected($serverInfo)->state(fn (): array => [
+            'profile' => $profile,
+        ]);
+    }
 }

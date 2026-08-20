@@ -3,10 +3,6 @@
 namespace App\Ssh;
 
 use App\Models\Server;
-use App\Ssh\HostFingerprint;
-use App\Ssh\HostkeyParser;
-use App\Ssh\KeypairParser;
-use App\Ssh\SshResult;
 use Illuminate\Process\Exceptions\ProcessFailedException;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Process;
@@ -118,17 +114,28 @@ class SshService
         HostFingerprint $host,
         string $script,
         int $timeout = 600,
+        ?callable $onOutput = null,
     ): SshResult {
-        return $this->withRuntimeFiles($server, $host, function (string $privateKeyPath, string $knownHostsPath) use ($server, $script, $timeout): SshResult {
-            $result = Process::timeout($timeout)
-                ->input($script)
-                ->run([
-                    ...$this->sshBase($server, $privateKeyPath, $knownHostsPath),
-                    '--',
-                    'bash', '-s',
-                ]);
+        return $this->withRuntimeFiles($server, $host, function (string $privateKeyPath, string $knownHostsPath) use ($server, $script, $timeout, $onOutput): SshResult {
+            $pending = Process::timeout($timeout)->input($script);
+            $command = [
+                ...$this->sshBase($server, $privateKeyPath, $knownHostsPath),
+                '--',
+                'bash', '-s',
+            ];
 
-            return new SshResult($result->exitCode(), $result->output(), $result->errorOutput());
+            if ($onOutput === null) {
+                $result = $pending->run($command);
+
+                return new SshResult($result->exitCode() ?? 1, $result->output(), $result->errorOutput());
+            }
+
+            $process = $pending->start($command, function (string $type, string $chunk) use ($onOutput): void {
+                $onOutput($chunk);
+            });
+            $result = $process->wait();
+
+            return new SshResult($result->exitCode() ?? 1, $result->output(), $result->errorOutput());
         });
     }
 
@@ -211,4 +218,3 @@ class SshService
         File::chmod($path, 0600);
     }
 }
-
