@@ -12,7 +12,6 @@ AVAILABLE="/etc/nginx/sites-available/${DOMAIN}"
 ENABLED="/etc/nginx/sites-enabled/${DOMAIN}"
 BACKUP=""
 RUN_QUEUE_RESTART="${MF_RUN_QUEUE_RESTART:-1}"
-SITE_TYPE="${MF_SITE_TYPE:-}"
 
 [[ -d "${RELEASE}" ]] || mini_forge_fail "$STEP_KEY" "missing_release" "Release directory does not exist."
 
@@ -52,7 +51,7 @@ if [[ -n "${MF_PHP_VERSION:-}" ]]; then
         || true
 fi
 
-if [[ "${RUN_QUEUE_RESTART}" == "1" && "${SITE_TYPE}" == "laravel" && -f "${RELEASE}/artisan" ]]; then
+if [[ "${RUN_QUEUE_RESTART}" == "1" ]] && mini_forge_is_laravel && [[ -f "${RELEASE}/artisan" ]]; then
     (
         cd "${RELEASE}"
         php artisan queue:restart --no-ansi || true

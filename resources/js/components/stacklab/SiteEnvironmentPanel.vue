@@ -116,7 +116,7 @@ const submit = () => {
             <div>
                 <Button
                     type="submit"
-                    class="h-10 rounded-lg bg-neutral-950 px-4 text-white hover:bg-neutral-800"
+                    class="h-10 rounded-lg bg-brand px-4 text-white hover:bg-brand/90"
                     :disabled="form.processing"
                 >
                     <Spinner v-if="form.processing" class="size-4" />

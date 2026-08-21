@@ -42,7 +42,7 @@ const props = withDefaults(
     }>(),
     {
         nav: 'app',
-        workspace: 'Personal',
+        workspace: '',
         activeTab: '',
         serverUuid: '',
         siteUuid: '',
@@ -140,10 +140,11 @@ const isTabActive = (
                     class="flex items-center gap-2 font-semibold tracking-tight"
                 >
                     <StacklabMark class="size-7" />
-                    <span>stacklab.app</span>
+                    <span>StackLab</span>
                 </Link>
 
                 <span
+                    v-if="workspace"
                     class="inline-flex items-center rounded-full border border-neutral-200 bg-[#F9F9F7] px-3 py-1 text-sm text-neutral-700"
                 >
                     {{ workspace }}
@@ -199,7 +200,7 @@ const isTabActive = (
                         {{ tab.label }}
                         <span
                             v-if="isTabActive(tab.label, tab.href)"
-                            class="absolute inset-x-0 -bottom-px h-0.5 bg-neutral-950"
+                            class="absolute inset-x-0 -bottom-px h-0.5 bg-brand"
                         />
                     </Link>
                 </template>
@@ -218,7 +219,7 @@ const isTabActive = (
                         {{ tab.label }}
                         <span
                             v-if="(activeTab || 'overview') === tab.key"
-                            class="absolute inset-x-0 -bottom-px h-0.5 bg-neutral-950"
+                            class="absolute inset-x-0 -bottom-px h-0.5 bg-brand"
                         />
                     </Link>
                 </template>
@@ -237,7 +238,7 @@ const isTabActive = (
                         {{ tab.label }}
                         <span
                             v-if="(activeTab || 'info') === tab.key"
-                            class="absolute inset-x-0 -bottom-px h-0.5 bg-neutral-950"
+                            class="absolute inset-x-0 -bottom-px h-0.5 bg-brand"
                         />
                     </Link>
                 </template>

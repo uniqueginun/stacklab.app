@@ -2,6 +2,7 @@
 import { Head, Link } from '@inertiajs/vue3';
 import { Plus } from '@lucide/vue';
 import { computed } from 'vue';
+import EmptyState from '@/components/stacklab/EmptyState.vue';
 import StacklabMark from '@/components/stacklab/StacklabMark.vue';
 import StatusBadge from '@/components/stacklab/StatusBadge.vue';
 import { Button } from '@/components/ui/button';
@@ -11,7 +12,6 @@ import type { ServerIndex } from '@/types';
 defineOptions({
     layout: {
         nav: 'app',
-        workspace: 'Personal',
         activeTab: 'Servers',
     },
 });
@@ -37,7 +37,7 @@ const subtitle = computed(() =>
         </div>
         <Button
             as-child
-            class="h-10 rounded-lg bg-neutral-950 px-4 text-white hover:bg-neutral-800"
+            class="h-10 rounded-lg bg-brand px-4 text-white hover:bg-brand/90"
         >
             <Link :href="serversCreate()">
                 <Plus class="size-4" />
@@ -46,21 +46,23 @@ const subtitle = computed(() =>
         </Button>
     </div>
 
-    <div
+    <EmptyState
         v-if="servers.length === 0"
-        class="mt-8 rounded-xl border border-dashed border-neutral-200 bg-white px-6 py-16 text-center"
+        title="No servers yet"
+        description="Connect a VPS you already own. StackLab provisions the stack over SSH, then you deploy from GitHub."
+        :steps="[
+            'Connect over SSH',
+            'Provision the stack',
+            'Deploy from GitHub',
+        ]"
     >
-        <p class="font-medium">No servers yet</p>
-        <p class="mt-1 text-sm text-neutral-500">
-            Connect an existing VPS to provision Nginx, PHP, and your database.
-        </p>
         <Button
             as-child
-            class="mt-6 h-10 rounded-lg bg-neutral-950 px-4 text-white hover:bg-neutral-800"
+            class="h-10 rounded-lg bg-brand px-4 text-white hover:bg-brand/90"
         >
             <Link :href="serversCreate()">Connect server</Link>
         </Button>
-    </div>
+    </EmptyState>
 
     <div
         v-else

@@ -52,7 +52,7 @@ if [[ "${RUN_NPM}" == "1" ]]; then
     fi
 fi
 
-if [[ "${MF_SITE_TYPE}" == "laravel" && -f artisan ]]; then
+if mini_forge_is_laravel && [[ -f artisan ]]; then
     mini_forge_require_cmd "$php_bin"
     if [[ -s "${ROOT}/shared/.env" ]] && grep -qE '^APP_KEY=.+' "${ROOT}/shared/.env"; then
         if [[ "${RUN_MIGRATIONS}" == "1" ]]; then

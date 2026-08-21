@@ -16,7 +16,8 @@ defineOptions({
     layout: {
         title: 'Confirm password',
         description:
-            'This is a secure area of the application. Please confirm your password before continuing.',
+            'This is a secure area. Confirm your password to continue.',
+        boxed: false,
     },
 });
 </script>
@@ -24,46 +25,48 @@ defineOptions({
 <template>
     <Head title="Confirm password" />
 
-    <PasskeyVerify
-        :routes="{
-            options: confirmOptions(),
-            submit: confirmStore(),
-        }"
-        label="Confirm with passkey"
-        loading-label="Confirming..."
-        separator="Or confirm with password"
-    />
+    <div class="rounded-2xl border border-neutral-200/80 bg-white p-8">
+        <PasskeyVerify
+            :routes="{
+                options: confirmOptions(),
+                submit: confirmStore(),
+            }"
+            label="Confirm with passkey"
+            loading-label="Confirming..."
+            separator="Or confirm with password"
+        />
 
-    <Form
-        v-bind="store.form()"
-        reset-on-success
-        v-slot="{ errors, processing }"
-    >
-        <div class="space-y-6">
+        <Form
+            v-bind="store.form()"
+            reset-on-success
+            v-slot="{ errors, processing }"
+            class="flex flex-col gap-5"
+        >
             <div class="grid gap-2">
-                <Label htmlFor="password">Password</Label>
+                <Label
+                    for="password"
+                    class="text-sm font-normal text-neutral-500"
+                    >Password</Label
+                >
                 <PasswordInput
                     id="password"
                     name="password"
-                    class="mt-1 block w-full"
                     required
                     autocomplete="current-password"
                     autofocus
+                    class="h-11 rounded-lg border-neutral-200 bg-white shadow-none"
                 />
-
                 <InputError :message="errors.password" />
             </div>
 
-            <div class="flex items-center">
-                <Button
-                    class="w-full"
-                    :disabled="processing"
-                    data-test="confirm-password-button"
-                >
-                    <Spinner v-if="processing" />
-                    Confirm password
-                </Button>
-            </div>
-        </div>
-    </Form>
+            <Button
+                class="h-11 w-full rounded-lg bg-brand text-white hover:bg-brand/90"
+                :disabled="processing"
+                data-test="confirm-password-button"
+            >
+                <Spinner v-if="processing" />
+                Confirm password
+            </Button>
+        </Form>
+    </div>
 </template>

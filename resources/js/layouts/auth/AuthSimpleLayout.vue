@@ -1,5 +1,7 @@
 <script setup lang="ts">
+import { Link } from '@inertiajs/vue3';
 import StacklabMark from '@/components/stacklab/StacklabMark.vue';
+import { home } from '@/routes';
 
 withDefaults(
     defineProps<{
@@ -20,7 +22,17 @@ withDefaults(
         class="flex min-h-svh flex-col items-center justify-center bg-[#F9F9F7] px-6 py-10 text-neutral-950"
     >
         <div class="mb-8 flex flex-col items-center text-center">
-            <StacklabMark class="mb-5 size-11" />
+            <Link
+                :href="home()"
+                class="mb-5 flex flex-col items-center"
+                aria-label="StackLab home"
+            >
+                <StacklabMark class="size-11" />
+                <span
+                    class="mt-3 text-[15px] font-semibold tracking-tight text-neutral-950"
+                    >StackLab</span
+                >
+            </Link>
             <h1 class="text-2xl font-semibold tracking-tight">{{ title }}</h1>
             <p
                 v-if="description"

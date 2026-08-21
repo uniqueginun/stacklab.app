@@ -2,6 +2,7 @@
 import { Head, Link } from '@inertiajs/vue3';
 import { Globe, Plus } from '@lucide/vue';
 import { computed, ref } from 'vue';
+import EmptyState from '@/components/stacklab/EmptyState.vue';
 import SiteTypeModal from '@/components/stacklab/SiteTypeModal.vue';
 import StatusBadge from '@/components/stacklab/StatusBadge.vue';
 import { Button } from '@/components/ui/button';
@@ -11,7 +12,6 @@ import type { SiteIndex } from '@/types';
 defineOptions({
     layout: {
         nav: 'app',
-        workspace: 'Personal',
         activeTab: 'Sites',
     },
 });
@@ -44,7 +44,7 @@ const subtitle = computed(() => {
             <p class="mt-1 text-sm text-neutral-500">{{ subtitle }}</p>
         </div>
         <Button
-            class="h-10 rounded-lg bg-neutral-950 px-4 text-white hover:bg-neutral-800"
+            class="h-10 rounded-lg bg-brand px-4 text-white hover:bg-brand/90"
             @click="showSiteTypes = true"
         >
             <Plus class="size-4" />
@@ -52,22 +52,19 @@ const subtitle = computed(() => {
         </Button>
     </div>
 
-    <div
+    <EmptyState
         v-if="sites.length === 0"
-        class="mt-8 rounded-xl border border-dashed border-neutral-200 bg-white px-6 py-16 text-center"
+        title="No sites yet"
+        description="Create a site on a provisioned server, then connect GitHub to ship a release."
+        :steps="['Pick a server', 'Create the site', 'Deploy from GitHub']"
     >
-        <p class="font-medium">No sites yet</p>
-        <p class="mt-1 text-sm text-neutral-500">
-            Create a site on a provisioned server, then connect GitHub to
-            deploy.
-        </p>
         <Button
-            class="mt-6 h-10 rounded-lg bg-neutral-950 px-4 text-white hover:bg-neutral-800"
+            class="h-10 rounded-lg bg-brand px-4 text-white hover:bg-brand/90"
             @click="showSiteTypes = true"
         >
             Create site
         </Button>
-    </div>
+    </EmptyState>
 
     <div
         v-else

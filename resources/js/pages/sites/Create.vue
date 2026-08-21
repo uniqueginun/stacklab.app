@@ -18,7 +18,6 @@ import type { SiteCreateServer } from '@/types';
 defineOptions({
     layout: {
         nav: 'none',
-        workspace: 'Personal',
     },
 });
 
@@ -114,7 +113,7 @@ const submit = () => {
             </p>
             <Button
                 as-child
-                class="mt-6 h-10 rounded-lg bg-neutral-950 px-4 text-white hover:bg-neutral-800"
+                class="mt-6 h-10 rounded-lg bg-brand px-4 text-white hover:bg-brand/90"
             >
                 <Link :href="serversIndex()">View servers</Link>
             </Button>
@@ -191,7 +190,7 @@ const submit = () => {
 
                 <Button
                     type="submit"
-                    class="h-11 w-full rounded-lg bg-neutral-950 text-white hover:bg-neutral-800"
+                    class="h-11 w-full rounded-lg bg-brand text-white hover:bg-brand/90"
                     :disabled="form.processing"
                 >
                     <Spinner v-if="form.processing" />

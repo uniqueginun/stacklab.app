@@ -24,7 +24,7 @@ fi
 
 ln -sfn "${ROOT}/shared/.env" "${RELEASE}/.env"
 
-if [[ "${MF_SITE_TYPE}" == "laravel" ]]; then
+if mini_forge_is_laravel; then
     mkdir -p "${ROOT}/shared/storage/app/public" \
         "${ROOT}/shared/storage/framework/cache/data" \
         "${ROOT}/shared/storage/framework/sessions" \
@@ -33,6 +33,10 @@ if [[ "${MF_SITE_TYPE}" == "laravel" ]]; then
 
     rm -rf "${RELEASE}/storage"
     ln -sfn "${ROOT}/shared/storage" "${RELEASE}/storage"
+
+    if [[ ! -L "${RELEASE}/storage" ]]; then
+        mini_forge_fail "$STEP_KEY" "storage_not_linked" "Release storage is not a symlink to shared/storage."
+    fi
 
     if [[ -d "${RELEASE}/public" ]]; then
         rm -rf "${RELEASE}/public/storage"

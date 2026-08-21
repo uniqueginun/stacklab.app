@@ -15,7 +15,7 @@ import { request } from '@/routes/password';
 
 defineOptions({
     layout: {
-        title: 'Sign in to stacklab.app',
+        title: 'Sign in',
         description: 'Provision servers and ship sites in minutes.',
         boxed: false,
     },
@@ -107,7 +107,7 @@ const remember = ref(true);
 
             <Button
                 type="submit"
-                class="h-11 w-full rounded-lg bg-neutral-950 text-white hover:bg-neutral-800"
+                class="h-11 w-full rounded-lg bg-brand text-white hover:bg-brand/90"
                 :tabindex="4"
                 :disabled="processing"
                 data-test="login-button"
@@ -117,40 +117,15 @@ const remember = ref(true);
             </Button>
         </Form>
 
-        <div class="relative my-6">
-            <div class="absolute inset-0 flex items-center">
-                <div class="w-full border-t border-neutral-200" />
-            </div>
-            <div class="relative flex justify-center text-xs">
-                <span class="bg-white px-3 text-neutral-400">OR</span>
-            </div>
-        </div>
-
-        <div class="grid gap-3">
-            <Button
-                type="button"
-                variant="outline"
-                class="h-11 w-full rounded-lg border-neutral-200 bg-white font-medium text-neutral-950 shadow-none hover:bg-neutral-50"
-            >
-                Continue with GitHub
-            </Button>
-            <Button
-                type="button"
-                variant="outline"
-                class="h-11 w-full rounded-lg border-neutral-200 bg-white font-medium text-neutral-950 shadow-none hover:bg-neutral-50"
-            >
-                Continue with GitLab
-            </Button>
-            <PasskeyVerify
-                :show-separator="false"
-                label="Continue with a passkey"
-                class="h-11 w-full rounded-lg border-neutral-200 bg-white font-medium text-neutral-950 shadow-none hover:bg-neutral-50"
-            />
-        </div>
+        <PasskeyVerify
+            :show-separator="false"
+            label="Continue with a passkey"
+            class="mt-6 h-11 w-full rounded-lg border-neutral-200 bg-white font-medium text-neutral-950 shadow-none hover:bg-neutral-50"
+        />
     </div>
 
     <p class="mt-6 text-center text-sm text-neutral-500">
-        New to stacklab?
+        New to StackLab?
         <Link
             :href="register()"
             class="font-medium text-brand hover:text-brand/80"

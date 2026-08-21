@@ -107,7 +107,7 @@ const confirm = () => {
             </button>
 
             <Button
-                class="h-11 w-full rounded-lg bg-neutral-950 text-white hover:bg-neutral-800"
+                class="h-11 w-full rounded-lg bg-brand text-white hover:bg-brand/90"
                 @click="confirm"
             >
                 I have stored these credentials

@@ -12,7 +12,8 @@ import { update } from '@/routes/password';
 defineOptions({
     layout: {
         title: 'Reset password',
-        description: 'Please enter your new password below',
+        description: 'Choose a new password for your account.',
+        boxed: false,
     },
 });
 
@@ -28,63 +29,74 @@ const inputEmail = ref(props.email);
 <template>
     <Head title="Reset password" />
 
-    <Form
-        v-bind="update.form()"
-        :transform="(data) => ({ ...data, token, email })"
-        :reset-on-success="['password', 'password_confirmation']"
-        v-slot="{ errors, processing }"
-    >
-        <div class="grid gap-6">
+    <div class="rounded-2xl border border-neutral-200/80 bg-white p-8">
+        <Form
+            v-bind="update.form()"
+            :transform="(data) => ({ ...data, token, email })"
+            :reset-on-success="['password', 'password_confirmation']"
+            v-slot="{ errors, processing }"
+            class="flex flex-col gap-5"
+        >
             <div class="grid gap-2">
-                <Label for="email">Email</Label>
+                <Label for="email" class="text-sm font-normal text-neutral-500"
+                    >Email</Label
+                >
                 <Input
                     id="email"
                     type="email"
                     name="email"
                     autocomplete="email"
                     v-model="inputEmail"
-                    class="mt-1 block w-full"
                     readonly
+                    class="h-11 rounded-lg border-neutral-200 bg-white shadow-none"
                 />
-                <InputError :message="errors.email" class="mt-2" />
+                <InputError :message="errors.email" />
             </div>
 
             <div class="grid gap-2">
-                <Label for="password">Password</Label>
+                <Label
+                    for="password"
+                    class="text-sm font-normal text-neutral-500"
+                    >Password</Label
+                >
                 <PasswordInput
                     id="password"
                     name="password"
                     autocomplete="new-password"
-                    class="mt-1 block w-full"
                     autofocus
-                    placeholder="Password"
+                    placeholder="At least 8 characters"
                     :passwordrules="passwordRules"
+                    class="h-11 rounded-lg border-neutral-200 bg-white shadow-none"
                 />
                 <InputError :message="errors.password" />
             </div>
 
             <div class="grid gap-2">
-                <Label for="password_confirmation"> Confirm password </Label>
+                <Label
+                    for="password_confirmation"
+                    class="text-sm font-normal text-neutral-500"
+                    >Confirm password</Label
+                >
                 <PasswordInput
                     id="password_confirmation"
                     name="password_confirmation"
                     autocomplete="new-password"
-                    class="mt-1 block w-full"
-                    placeholder="Confirm password"
+                    placeholder="Re-enter your password"
                     :passwordrules="passwordRules"
+                    class="h-11 rounded-lg border-neutral-200 bg-white shadow-none"
                 />
                 <InputError :message="errors.password_confirmation" />
             </div>
 
             <Button
                 type="submit"
-                class="mt-4 w-full"
+                class="h-11 w-full rounded-lg bg-brand text-white hover:bg-brand/90"
                 :disabled="processing"
                 data-test="reset-password-button"
             >
                 <Spinner v-if="processing" />
                 Reset password
             </Button>
-        </div>
-    </Form>
+        </Form>
+    </div>
 </template>

@@ -239,6 +239,13 @@ mini_forge_www_data_group_exists() {
     mini_forge_has_cmd getent && getent group www-data >/dev/null
 }
 
+# Site types are stored as "Laravel" / "PHP" / "HTML". Bash == is case-sensitive.
+mini_forge_is_laravel() {
+    local type="${1:-${MF_SITE_TYPE:-}}"
+
+    [[ "${type,,}" == "laravel" ]]
+}
+
 # php-fpm (www-data) must own-or-group-write these trees. Laravel's Filesystem::replace()
 # calls tempnam() in the target directory; if that dir isn't writable PHP 8.4+ raises
 # "tempnam(): file created in the system's temporary directory" as an ErrorException.
@@ -287,6 +294,14 @@ mini_forge_ensure_www_data_readable() {
         "${root}/shared/storage/logs"
 
     mini_forge_make_fpm_writable "${root}/shared/storage" "${ssh_user}"
+
+    if [[ -n "${release}" ]] && { [[ -L "${release}/storage" ]] || [[ -d "${release}/storage" ]]; }; then
+        local storage_path
+        storage_path="$(readlink -f "${release}/storage" 2>/dev/null || true)"
+        if [[ -n "${storage_path}" && -d "${storage_path}" ]]; then
+            mini_forge_make_fpm_writable "${storage_path}" "${ssh_user}"
+        fi
+    fi
 
     if [[ -f "${root}/shared/.env" ]]; then
         sudo -n chmod 640 "${root}/shared/.env" || true

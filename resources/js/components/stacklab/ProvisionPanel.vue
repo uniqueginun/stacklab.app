@@ -121,7 +121,7 @@ const submit = () => {
             <Button
                 type="submit"
                 :disabled="form.processing"
-                class="h-10 rounded-lg bg-neutral-950 px-4 text-white hover:bg-neutral-800"
+                class="h-10 rounded-lg bg-brand px-4 text-white hover:bg-brand/90"
             >
                 <Spinner v-if="form.processing" />
                 Start provisioning

@@ -168,7 +168,7 @@ const bagErrors = computed(
                 <Button
                     type="button"
                     :disabled="!canDeploy"
-                    class="h-10 shrink-0 rounded-lg bg-neutral-950 px-4 text-white hover:bg-neutral-800 disabled:opacity-50"
+                    class="h-10 shrink-0 rounded-lg bg-brand px-4 text-white hover:bg-brand/90 disabled:opacity-50"
                     @click="deploy"
                 >
                     <Spinner v-if="form.processing" class="size-4" />
@@ -294,9 +294,14 @@ const bagErrors = computed(
             </ol>
 
             <div class="px-6 pb-6">
+                <p
+                    class="mb-2 text-xs font-medium tracking-wide text-neutral-400 uppercase"
+                >
+                    Deployment log
+                </p>
                 <pre
                     ref="logEl"
-                    class="max-h-80 overflow-auto rounded-xl bg-neutral-950 p-4 font-mono text-xs leading-5 text-neutral-100"
+                    class="max-h-[36rem] min-h-96 overflow-auto rounded-xl border border-neutral-200 bg-neutral-50 p-4 font-mono text-xs leading-6 break-words whitespace-pre-wrap text-neutral-800"
                     >{{
                         liveLog ||
                         (isDeploying
@@ -423,7 +428,7 @@ const bagErrors = computed(
                         <Button
                             type="submit"
                             :disabled="processing || isDeploying"
-                            class="rounded-lg bg-neutral-950 text-white hover:bg-neutral-800"
+                            class="rounded-lg bg-brand text-white hover:bg-brand/90"
                         >
                             <Spinner v-if="processing" class="size-4" />
                             Start rollback

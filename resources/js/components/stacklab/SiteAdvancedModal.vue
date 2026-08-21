@@ -118,7 +118,7 @@ const addPath = () => {
             </div>
 
             <Button
-                class="h-11 w-full rounded-lg bg-neutral-950 text-white hover:bg-neutral-800"
+                class="h-11 w-full rounded-lg bg-brand text-white hover:bg-brand/90"
                 @click="emit('update:open', false)"
             >
                 Update

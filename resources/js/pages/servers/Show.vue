@@ -242,8 +242,7 @@ watch(
             <h2 class="text-xl font-semibold">Sites</h2>
             <Button
                 v-if="server.is_provisioned"
-                variant="outline"
-                class="h-9 rounded-lg border-neutral-200 bg-white shadow-none"
+                class="h-9 rounded-lg bg-brand px-4 text-white hover:bg-brand/90"
                 @click="showSiteTypes = true"
             >
                 <Plus class="size-4" />
@@ -290,8 +289,14 @@ watch(
         >
             <p class="font-medium">No sites yet</p>
             <p class="mt-1 text-sm text-neutral-500">
-                Create a site on this server when you are ready to deploy.
+                Create a site on this server, then connect GitHub to deploy.
             </p>
+            <Button
+                class="mt-6 h-10 rounded-lg bg-brand px-4 text-white hover:bg-brand/90"
+                @click="showSiteTypes = true"
+            >
+                Create site
+            </Button>
         </div>
 
         <div

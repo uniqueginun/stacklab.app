@@ -14,7 +14,6 @@ import type { ServerProvider } from '@/types';
 defineOptions({
     layout: {
         nav: 'none',
-        workspace: 'Personal',
     },
 });
 
@@ -191,7 +190,7 @@ const providers = [
 
                 <Button
                     type="submit"
-                    class="h-11 w-full rounded-lg bg-neutral-950 text-white hover:bg-neutral-800"
+                    class="h-11 w-full rounded-lg bg-brand text-white hover:bg-brand/90"
                     :disabled="processing"
                 >
                     <Spinner v-if="processing" />

@@ -20,13 +20,13 @@ createInertiaApp({
             case name.startsWith('sites/'):
                 return StacklabLayout;
             case name.startsWith('settings/'):
-                return [AppLayout, SettingsLayout];
+                return [StacklabLayout, SettingsLayout];
             default:
                 return AppLayout;
         }
     },
     progress: {
-        color: '#4B5563',
+        color: '#f39a39',
     },
 });
 

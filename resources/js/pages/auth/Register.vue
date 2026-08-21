@@ -19,7 +19,7 @@ defineProps<{
 defineOptions({
     layout: {
         title: 'Create your account',
-        description: 'Start with a 5-day free trial. No card required.',
+        description: 'Connect a server over SSH, then deploy from GitHub.',
         boxed: false,
     },
 });
@@ -27,9 +27,9 @@ defineOptions({
 const agreed = ref(false);
 
 const features = [
-    'Unlimited sites per server',
-    'Zero downtime deployments',
-    'Free SSL on every domain',
+    'SSH-first server provisioning',
+    'Deploy directly from GitHub',
+    'Visible, repeatable releases',
 ];
 </script>
 
@@ -141,7 +141,7 @@ const features = [
 
             <Button
                 type="submit"
-                class="h-11 w-full rounded-lg bg-neutral-950 text-white hover:bg-neutral-800"
+                class="h-11 w-full rounded-lg bg-brand text-white hover:bg-brand/90"
                 tabindex="6"
                 :disabled="processing"
                 data-test="register-user-button"

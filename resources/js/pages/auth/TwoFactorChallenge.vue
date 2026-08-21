@@ -37,6 +37,7 @@ watchEffect(() => {
     setLayoutProps({
         title: authConfigContent.value.title,
         description: authConfigContent.value.description,
+        boxed: true,
     });
 });
 
@@ -82,14 +83,17 @@ const toggleRecoveryMode = (clearErrors: () => void): void => {
                     </div>
                     <InputError :message="errors.code" />
                 </div>
-                <Button type="submit" class="w-full" :disabled="processing"
+                <Button
+                    type="submit"
+                    class="h-11 w-full rounded-lg bg-brand text-white hover:bg-brand/90"
+                    :disabled="processing"
                     >Continue</Button
                 >
-                <div class="text-center text-sm text-muted-foreground">
+                <div class="text-center text-sm text-neutral-500">
                     <span>or you can </span>
                     <button
                         type="button"
-                        class="text-foreground underline decoration-neutral-300 underline-offset-4 transition-colors duration-300 ease-out hover:decoration-current! dark:decoration-neutral-500"
+                        class="font-medium text-brand hover:text-brand/80"
                         @click="() => toggleRecoveryMode(clearErrors)"
                     >
                         {{ authConfigContent.buttonText }}
@@ -111,17 +115,21 @@ const toggleRecoveryMode = (clearErrors: () => void): void => {
                     placeholder="Enter recovery code"
                     :autofocus="showRecoveryInput"
                     required
+                    class="h-11 rounded-lg border-neutral-200 bg-white shadow-none"
                 />
                 <InputError :message="errors.recovery_code" />
-                <Button type="submit" class="w-full" :disabled="processing"
+                <Button
+                    type="submit"
+                    class="h-11 w-full rounded-lg bg-brand text-white hover:bg-brand/90"
+                    :disabled="processing"
                     >Continue</Button
                 >
 
-                <div class="text-center text-sm text-muted-foreground">
+                <div class="text-center text-sm text-neutral-500">
                     <span>or you can </span>
                     <button
                         type="button"
-                        class="text-foreground underline decoration-neutral-300 underline-offset-4 transition-colors duration-300 ease-out hover:decoration-current! dark:decoration-neutral-500"
+                        class="font-medium text-brand hover:text-brand/80"
                         @click="() => toggleRecoveryMode(clearErrors)"
                     >
                         {{ authConfigContent.buttonText }}
