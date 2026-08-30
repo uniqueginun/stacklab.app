@@ -659,10 +659,10 @@ onUnmounted(() => {
                             </div>
 
                             <div
-                                class="terminal-scan relative min-h-[410px] p-5 font-mono text-[12px] leading-6 sm:p-6 sm:text-[13px]"
+                                class="terminal-scan relative flex h-[24rem] flex-col overflow-hidden p-5 font-mono text-[12px] leading-6 sm:h-[26rem] sm:p-6 sm:text-[13px]"
                             >
                                 <div
-                                    class="mb-5 flex items-center justify-between rounded-xl border border-white/[0.07] bg-white/[0.018] px-4 py-3"
+                                    class="mb-5 flex shrink-0 items-center justify-between rounded-xl border border-white/[0.07] bg-white/[0.018] px-4 py-3"
                                 >
                                     <div>
                                         <p
@@ -685,34 +685,36 @@ onUnmounted(() => {
                                 </div>
 
                                 <div
-                                    class="space-y-1.5"
+                                    class="flex min-h-0 flex-1 flex-col justify-end overflow-hidden"
                                     aria-live="polite"
                                     aria-atomic="false"
                                 >
-                                    <p
-                                        v-for="line in terminalLines"
-                                        :key="line.id"
-                                        class="terminal-line"
-                                        :class="[
-                                            line.lineClass,
-                                            { 'is-visible': line.visible },
-                                        ]"
-                                    >
-                                        <span
-                                            class="mr-2"
-                                            :class="line.prefixClass"
-                                            >{{ line.prefix }}</span
-                                        ><span>{{ line.text }}</span
-                                        ><span
-                                            v-if="line.showCursor"
-                                            class="terminal-cursor"
-                                            aria-hidden="true"
-                                        ></span>
-                                    </p>
+                                    <div class="space-y-1.5">
+                                        <p
+                                            v-for="line in terminalLines"
+                                            :key="line.id"
+                                            class="terminal-line"
+                                            :class="[
+                                                line.lineClass,
+                                                { 'is-visible': line.visible },
+                                            ]"
+                                        >
+                                            <span
+                                                class="mr-2"
+                                                :class="line.prefixClass"
+                                                >{{ line.prefix }}</span
+                                            ><span>{{ line.text }}</span
+                                            ><span
+                                                v-if="line.showCursor"
+                                                class="terminal-cursor"
+                                                aria-hidden="true"
+                                            ></span>
+                                        </p>
+                                    </div>
                                 </div>
 
                                 <div
-                                    class="mt-6 border-t border-white/[0.06] pt-4"
+                                    class="mt-6 shrink-0 border-t border-white/[0.06] pt-4"
                                 >
                                     <div
                                         class="flex items-center justify-between gap-4"
