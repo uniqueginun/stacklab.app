@@ -4,6 +4,7 @@ namespace App\Providers;
 
 use App\Operations\Aftermath\FinalizeDatabaseAftermath;
 use App\Operations\Aftermath\FinalizeSiteAftermath;
+use App\Operations\Aftermath\FinalizeSslAftermath;
 use App\Support\StepAftermathRegistry;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\Date;
@@ -22,6 +23,7 @@ class AppServiceProvider extends ServiceProvider
         $this->app->tag([
             FinalizeSiteAftermath::class,
             FinalizeDatabaseAftermath::class,
+            FinalizeSslAftermath::class,
         ], 'operation.step_aftermaths');
 
         $this->app->singleton(StepAftermathRegistry::class, function ($app): StepAftermathRegistry {

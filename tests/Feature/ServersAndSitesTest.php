@@ -486,6 +486,23 @@ test('the site deployments tab can be rendered', function () {
         );
 });
 
+test('the site ssl tab can be rendered', function () {
+    $user = User::factory()->create();
+    $server = Server::factory()->for($user)->provisioned()->create();
+    $site = Site::factory()->for($user)->for($server)->deployed()->create();
+
+    $this->actingAs($user)
+        ->get(route('sites.ssl', $site))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('sites/Show')
+            ->where('tab', 'ssl')
+            ->where('site.uuid', $site->uuid)
+            ->where('site.can_manage_ssl', true)
+            ->where('certificate', null)
+        );
+});
+
 test('the site source control tab can be rendered', function () {
     $user = User::factory()->create();
     $server = Server::factory()->for($user)->provisioned()->create();

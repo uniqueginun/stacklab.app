@@ -2,6 +2,7 @@
 
 namespace App\Http\Resources;
 
+use App\Enums\SiteStatus;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 
@@ -34,6 +35,9 @@ class SitesShowResource extends SitesIndexResource
                 'short_sha' => Str::substr($release->commit_sha, 0, 7),
                 'commit_message' => $release->commit_message,
             ];
+        $data['can_manage_ssl'] = $this->statusValue() === SiteStatus::DEPLOYED->value;
+        $data['has_active_ssl'] = $this->resource->hasActiveSsl();
+        $data['can_include_www'] = ! str_starts_with(strtolower((string) $this->domain), 'www.');
 
         return $data;
     }

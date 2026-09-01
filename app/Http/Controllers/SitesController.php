@@ -6,6 +6,7 @@ use App\Enums\ConnectionStatus;
 use App\Http\Requests\SiteStoreRequest;
 use App\Http\Resources\OperationResource;
 use App\Http\Resources\ReleaseResource;
+use App\Http\Resources\SiteCertificateResource;
 use App\Http\Resources\SiteCreateServerResource;
 use App\Http\Resources\SitesIndexResource;
 use App\Http\Resources\SitesShowResource;
@@ -112,6 +113,13 @@ class SitesController extends Controller
         return $this->renderShow($request, $site, 'commands');
     }
 
+    public function ssl(Request $request, Site $site): Response
+    {
+        Gate::authorize('view', $site);
+
+        return $this->renderShow($request, $site, 'ssl');
+    }
+
     public function destroy(Site $site): RedirectResponse
     {
         Gate::authorize('delete', $site);
@@ -128,12 +136,17 @@ class SitesController extends Controller
         $site->loadMissing(['server', 'currentRelease']);
 
         $connection = $request->user()->githubConnection;
-        $operation = $tab === 'deployments' ? $site->latestDeploymentOperation() : null;
+        $operation = match ($tab) {
+            'deployments' => $site->latestDeploymentOperation(),
+            'ssl' => $site->latestSslOperation(),
+            default => null,
+        };
         $releases = $tab === 'deployments'
             ? $site->releases()->latest('id')->get()->each(
                 fn (Release $release) => $release->setRelation('site', $site),
             )
             : collect();
+        $certificate = $tab === 'ssl' ? $site->displayCertificate() : null;
 
         return inertia('sites/Show', [
             'site' => (new SitesShowResource($site))->resolve(),
@@ -146,6 +159,9 @@ class SitesController extends Controller
                 ? (new OperationResource($operation))->resolve()
                 : null,
             'releases' => ReleaseResource::collection($releases)->resolve(),
+            'certificate' => $certificate !== null
+                ? (new SiteCertificateResource($certificate))->resolve()
+                : null,
         ]);
     }
 }

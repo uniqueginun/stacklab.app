@@ -26,6 +26,7 @@ import {
     index as sitesIndex,
     show as siteShow,
     source as siteSource,
+    ssl as siteSsl,
 } from '@/routes/sites';
 
 export type StacklabNav = 'app' | 'server' | 'site' | 'none';
@@ -98,6 +99,11 @@ const siteTabs = computed(() => {
         { label: 'Site info', href: info, key: 'info' },
         { label: 'Source control', href: source, key: 'source' },
         { label: 'Deployments', href: deployments, key: 'deployments' },
+        {
+            label: 'SSL',
+            href: props.siteUuid ? siteSsl(props.siteUuid) : sitesIndex(),
+            key: 'ssl',
+        },
     ];
 
     if (props.siteIsPhp && props.siteUuid) {

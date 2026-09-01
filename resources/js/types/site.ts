@@ -44,12 +44,37 @@ export type SiteShow = SiteIndex & {
     root_path: string | null;
     last_deployed_at: string | null;
     created_at: string | null;
+    can_manage_ssl: boolean;
+    has_active_ssl: boolean;
+    can_include_www: boolean;
     current_release: {
         uuid: string;
         commit_sha: string;
         short_sha: string;
         commit_message: string | null;
     } | null;
+};
+
+export type SiteCertificateType = 'letsencrypt' | 'existing' | 'csr';
+
+export type SiteCertificateStatus =
+    | 'pending'
+    | 'awaiting_certificate'
+    | 'active'
+    | 'failed';
+
+export type SiteCertificate = {
+    uuid: string;
+    type: SiteCertificateType;
+    type_label: string;
+    status: SiteCertificateStatus;
+    status_label: string;
+    domains: string[];
+    csr: string | null;
+    expires_at: string | null;
+    failure_message: string | null;
+    activated_at: string | null;
+    created_at: string | null;
 };
 
 export type SiteRelease = {

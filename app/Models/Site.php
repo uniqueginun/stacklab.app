@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Enums\SiteCertificateStatus;
 use App\Enums\SiteStatus;
 use App\Support\SiteDeploymentOptions;
 use Database\Factories\SiteFactory;
@@ -56,6 +57,63 @@ class Site extends Model
     public function releases(): HasMany
     {
         return $this->hasMany(Release::class);
+    }
+
+    /** @return HasMany<SiteCertificate, $this> */
+    public function certificates(): HasMany
+    {
+        return $this->hasMany(SiteCertificate::class);
+    }
+
+    public function activeCertificate(): ?SiteCertificate
+    {
+        if ($this->relationLoaded('certificates')) {
+            $active = $this->certificates
+                ->first(fn (SiteCertificate $certificate): bool => $certificate->isActive());
+
+            if ($active !== null) {
+                return $active;
+            }
+        }
+
+        return $this->certificates()
+            ->where('status', SiteCertificateStatus::ACTIVE)
+            ->latest('id')
+            ->first();
+    }
+
+    public function inFlightCertificate(): ?SiteCertificate
+    {
+        return $this->certificates()
+            ->whereIn('status', [
+                SiteCertificateStatus::PENDING,
+                SiteCertificateStatus::AWAITING_CERTIFICATE,
+            ])
+            ->latest('id')
+            ->first();
+    }
+
+    public function displayCertificate(): ?SiteCertificate
+    {
+        return $this->inFlightCertificate()
+            ?? $this->activeCertificate()
+            ?? $this->certificates()->latest('id')->first();
+    }
+
+    public function latestSslOperation(): ?Operation
+    {
+        return Operation::query()
+            ->where('type', 'ssl')
+            ->where('server_id', $this->server_id)
+            ->where('plan_snapshot->site_id', $this->id)
+            ->with(['steps' => fn ($query) => $query->orderBy('position')])
+            ->latest('id')
+            ->first();
+    }
+
+    public function hasActiveSsl(): bool
+    {
+        return $this->activeCertificate() !== null;
     }
 
     /** @return BelongsTo<Release, $this> */

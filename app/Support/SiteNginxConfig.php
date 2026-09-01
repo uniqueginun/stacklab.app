@@ -3,9 +3,12 @@
 namespace App\Support;
 
 use App\Models\Site;
+use App\Models\SiteCertificate;
 
 class SiteNginxConfig
 {
+    public const ACME_WEBROOT = '/var/www/letsencrypt';
+
     public function documentRoot(Site $site, bool $useCurrentSymlink = false): string
     {
         $webDirectory = $site->web_directory === '.' ? '' : '/'.trim($site->web_directory, '/');
@@ -36,50 +39,29 @@ class SiteNginxConfig
         return '/run/php/php'.$version.'-fpm.sock';
     }
 
-    public function serverBlock(Site $site, ?string $publicRoot = null): string
-    {
-        $domain = $site->domain;
+    public function serverBlock(
+        Site $site,
+        ?string $publicRoot = null,
+        ?SiteCertificate $certificate = null,
+        bool $forceHttp = false,
+    ): string {
         $publicRoot ??= $this->documentRoot($site);
-        $phpSocket = $this->phpFpmSocket($site);
 
-        return <<<NGINX
-server {
-    listen 80;
-    listen [::]:80;
-    server_name {$domain};
-    root {$publicRoot};
+        if ($forceHttp) {
+            return $this->httpOnlyBlock($site, $publicRoot);
+        }
 
-    add_header X-Frame-Options "SAMEORIGIN";
-    add_header X-Content-Type-Options "nosniff";
+        if ($certificate === null && $site->exists) {
+            $certificate = $site->activeCertificate();
+        }
 
-    index index.php index.html;
+        if ($certificate === null) {
+            return $this->httpOnlyBlock($site, $publicRoot);
+        }
 
-    charset utf-8;
-
-    location / {
-        try_files \$uri \$uri/ /index.php?\$query_string;
-    }
-
-    location = /favicon.ico { access_log off; log_not_found off; }
-    location = /robots.txt  { access_log off; log_not_found off; }
-
-    error_page 404 /index.php;
-
-    location ~ \\.php\$ {
-        fastcgi_pass unix:{$phpSocket};
-        fastcgi_param SCRIPT_FILENAME \$realpath_root\$fastcgi_script_name;
-        include fastcgi_params;
-        fastcgi_hide_header X-Powered-By;
-        fastcgi_buffer_size 32k;
-        fastcgi_buffers 16 16k;
-        fastcgi_busy_buffers_size 32k;
-    }
-
-    location ~ /\\.(?!well-known).* {
-        deny all;
-    }
-}
-NGINX;
+        return $this->httpRedirectBlock($site, $certificate)
+            ."\n"
+            .$this->httpsBlock($site, $publicRoot, $certificate);
     }
 
     public function installScript(Site $site): string
@@ -164,5 +146,141 @@ sudo -n systemctl restart nginx || sudo -n nginx -s reload
 rm -f "\${BACKUP}"
 echo "SITE_DEPLOYED:\${DOMAIN}"
 BASH;
+    }
+
+    private function httpOnlyBlock(Site $site, string $publicRoot): string
+    {
+        $domain = $site->domain;
+        $acme = self::ACME_WEBROOT;
+
+        return <<<NGINX
+server {
+    listen 80;
+    listen [::]:80;
+    server_name {$domain};
+    root {$publicRoot};
+
+{$this->acmeLocation($acme)}
+{$this->securityHeaders(includeHsts: false)}
+{$this->appLocations($site)}
+}
+NGINX;
+    }
+
+    private function httpRedirectBlock(Site $site, SiteCertificate $certificate): string
+    {
+        $serverName = $this->serverName($site, $certificate);
+        $acme = self::ACME_WEBROOT;
+
+        return <<<NGINX
+server {
+    listen 80;
+    listen [::]:80;
+    server_name {$serverName};
+
+{$this->acmeLocation($acme)}
+    location / {
+        return 301 https://\$host\$request_uri;
+    }
+}
+NGINX;
+    }
+
+    private function httpsBlock(Site $site, string $publicRoot, SiteCertificate $certificate): string
+    {
+        $serverName = $this->serverName($site, $certificate);
+        $certificatePath = $certificate->certificatePath();
+        $privateKeyPath = $certificate->privateKeyPath();
+
+        return <<<NGINX
+server {
+    listen 443 ssl http2;
+    listen [::]:443 ssl http2;
+    server_name {$serverName};
+    root {$publicRoot};
+
+    ssl_certificate {$certificatePath};
+    ssl_certificate_key {$privateKeyPath};
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_prefer_server_ciphers off;
+    ssl_ciphers ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305:DHE-RSA-AES128-GCM-SHA256:DHE-RSA-AES256-GCM-SHA384;
+
+{$this->securityHeaders(includeHsts: true)}
+{$this->appLocations($site)}
+}
+NGINX;
+    }
+
+    private function serverName(Site $site, SiteCertificate $certificate): string
+    {
+        $domains = $certificate->domains;
+
+        if (! is_array($domains) || $domains === []) {
+            return $site->domain;
+        }
+
+        $names = array_values(array_filter(
+            $domains,
+            fn (mixed $domain): bool => is_string($domain) && $domain !== '',
+        ));
+
+        return $names === [] ? $site->domain : implode(' ', $names);
+    }
+
+    private function acmeLocation(string $webroot): string
+    {
+        return <<<NGINX
+    location ^~ /.well-known/acme-challenge/ {
+        default_type "text/plain";
+        root {$webroot};
+        allow all;
+    }
+NGINX;
+    }
+
+    private function securityHeaders(bool $includeHsts): string
+    {
+        $hsts = $includeHsts
+            ? "    add_header Strict-Transport-Security \"max-age=31536000; includeSubDomains\" always;\n"
+            : '';
+
+        return <<<NGINX
+{$hsts}    add_header X-Frame-Options "SAMEORIGIN";
+    add_header X-Content-Type-Options "nosniff";
+NGINX;
+    }
+
+    private function appLocations(Site $site): string
+    {
+        $phpSocket = $this->phpFpmSocket($site);
+
+        return <<<NGINX
+    index index.php index.html;
+
+    charset utf-8;
+
+    location / {
+        try_files \$uri \$uri/ /index.php?\$query_string;
+    }
+
+    location = /favicon.ico { access_log off; log_not_found off; }
+    location = /robots.txt  { access_log off; log_not_found off; }
+
+    error_page 404 /index.php;
+
+    location ~ \\.php\$ {
+        fastcgi_pass unix:{$phpSocket};
+        fastcgi_param SCRIPT_FILENAME \$realpath_root\$fastcgi_script_name;
+        include fastcgi_params;
+        fastcgi_hide_header X-Powered-By;
+        fastcgi_buffer_size 32k;
+        fastcgi_buffers 16 16k;
+        fastcgi_busy_buffers_size 32k;
+    }
+
+    location ~ /\\.(?!well-known).* {
+        deny all;
+    }
+NGINX;
     }
 }

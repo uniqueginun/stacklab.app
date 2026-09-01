@@ -5,6 +5,7 @@ namespace App\Support;
 use App\Models\OperationStep;
 use App\Models\Server;
 use App\Models\ServerDatabase;
+use App\Models\SiteCertificate;
 use App\Ssh\HostFingerprint;
 use App\Ssh\SshService;
 use Illuminate\Support\Facades\File;
@@ -42,8 +43,10 @@ final readonly class RecipeRunner
 
         $script = File::get($libraryPath)
         .PHP_EOL
-        .$this->argumentExports($this->withDatabasePassword(
-            is_array($step->arguments) ? $step->arguments : [],
+        .$this->argumentExports($this->withCertificateMaterials(
+            $this->withDatabasePassword(
+                is_array($step->arguments) ? $step->arguments : [],
+            ),
         ))
         .File::get($recipePath);
 
@@ -107,6 +110,45 @@ final readonly class RecipeRunner
         }
 
         $arguments['db_password'] = $database->password;
+
+        return $arguments;
+    }
+
+    /**
+     * @param  array<string, mixed>  $arguments
+     * @return array<string, mixed>
+     */
+    private function withCertificateMaterials(array $arguments): array
+    {
+        $certificateId = $arguments['certificate_id'] ?? null;
+
+        if (! is_int($certificateId) && ! is_numeric($certificateId)) {
+            return $arguments;
+        }
+
+        $certificate = SiteCertificate::query()->find((int) $certificateId);
+
+        if ($certificate === null) {
+            return $arguments;
+        }
+
+        if (is_string($certificate->certificate) && $certificate->certificate !== '') {
+            $arguments['ssl_certificate_b64'] = base64_encode(
+                Pem::normalizeCertificates($certificate->certificate) ?? $certificate->certificate,
+            );
+        }
+
+        if (is_string($certificate->private_key) && $certificate->private_key !== '') {
+            $arguments['ssl_private_key_b64'] = base64_encode(
+                Pem::normalizePrivateKey($certificate->private_key) ?? $certificate->private_key,
+            );
+        }
+
+        if (is_string($certificate->chain) && $certificate->chain !== '') {
+            $arguments['ssl_chain_b64'] = base64_encode(
+                Pem::normalizeCertificates($certificate->chain) ?? $certificate->chain,
+            );
+        }
 
         return $arguments;
     }

@@ -7,12 +7,14 @@ import SiteDeploymentsPanel from '@/components/stacklab/SiteDeploymentsPanel.vue
 import SiteEnvironmentPanel from '@/components/stacklab/SiteEnvironmentPanel.vue';
 import SiteInfoPanel from '@/components/stacklab/SiteInfoPanel.vue';
 import SiteSourceControlPanel from '@/components/stacklab/SiteSourceControlPanel.vue';
+import SiteSslPanel from '@/components/stacklab/SiteSslPanel.vue';
 import StatusBadge from '@/components/stacklab/StatusBadge.vue';
 import { show as serverShow } from '@/routes/servers';
 import { index as sitesIndex } from '@/routes/sites';
 import type {
     GitHubAccount,
     ServerOperation,
+    SiteCertificate,
     SiteRelease,
     SiteShow,
 } from '@/types';
@@ -26,10 +28,11 @@ defineOptions({
 
 const props = defineProps<{
     site: SiteShow;
-    tab: 'info' | 'source' | 'deployments' | 'environment' | 'commands';
+    tab: 'info' | 'source' | 'deployments' | 'environment' | 'commands' | 'ssl';
     github: GitHubAccount;
     operation: ServerOperation | null;
     releases: SiteRelease[];
+    certificate: SiteCertificate | null;
 }>();
 
 watchEffect(() => {
@@ -58,6 +61,10 @@ const pageTitle = computed(() => {
 
     if (props.tab === 'commands') {
         return `Commands · ${props.site.domain}`;
+    }
+
+    if (props.tab === 'ssl') {
+        return `SSL · ${props.site.domain}`;
     }
 
     return props.site.domain;
@@ -110,6 +117,12 @@ const pageTitle = computed(() => {
     />
     <SiteEnvironmentPanel v-else-if="tab === 'environment'" :site="site" />
     <SiteCommandsPanel v-else-if="tab === 'commands'" :site="site" />
+    <SiteSslPanel
+        v-else-if="tab === 'ssl'"
+        :site="site"
+        :certificate="certificate"
+        :operation="operation"
+    />
     <SiteDeploymentsPanel
         v-else-if="tab === 'deployments'"
         :site="site"

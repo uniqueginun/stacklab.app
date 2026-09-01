@@ -4,12 +4,17 @@ use App\Http\Controllers\ServerDatabaseController;
 use App\Http\Controllers\ServerProvisionController;
 use App\Http\Controllers\ServersController;
 use App\Http\Controllers\ServerSSHController;
+use App\Http\Controllers\SiteCertificateController;
 use App\Http\Controllers\SiteCommandController;
+use App\Http\Controllers\SiteCsrController;
 use App\Http\Controllers\SiteDeployController;
 use App\Http\Controllers\SiteEnvironmentController;
+use App\Http\Controllers\SiteExistingCertificateController;
+use App\Http\Controllers\SiteLetsEncryptController;
 use App\Http\Controllers\SiteRepositoryController;
 use App\Http\Controllers\SiteRollbackController;
 use App\Http\Controllers\SitesController;
+use App\Http\Controllers\SiteSignedCertificateController;
 use App\Http\Controllers\VersionControlProviderController;
 use Illuminate\Support\Facades\Route;
 
@@ -56,6 +61,19 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('sites/{site:uuid}/deployments', [SitesController::class, 'deployments'])->name('sites.deployments');
     Route::get('sites/{site:uuid}/environment', [SitesController::class, 'environment'])->name('sites.environment');
     Route::get('sites/{site:uuid}/commands', [SitesController::class, 'commands'])->name('sites.commands');
+    Route::get('sites/{site:uuid}/ssl', [SitesController::class, 'ssl'])->name('sites.ssl');
+    Route::post('sites/{site:uuid}/ssl/letsencrypt', [SiteLetsEncryptController::class, 'store'])
+        ->name('sites.ssl.letsencrypt');
+    Route::post('sites/{site:uuid}/ssl/existing', [SiteExistingCertificateController::class, 'store'])
+        ->name('sites.ssl.existing');
+    Route::post('sites/{site:uuid}/ssl/csr', [SiteCsrController::class, 'store'])
+        ->name('sites.ssl.csr');
+    Route::post('sites/{site:uuid}/ssl/{certificate:uuid}/install', [SiteSignedCertificateController::class, 'store'])
+        ->name('sites.ssl.install')
+        ->scopeBindings();
+    Route::delete('sites/{site:uuid}/ssl/{certificate:uuid}', [SiteCertificateController::class, 'destroy'])
+        ->name('sites.ssl.destroy')
+        ->scopeBindings();
     Route::delete('sites/{site:uuid}', [SitesController::class, 'destroy'])->name('sites.destroy');
 
     Route::get('settings/connections/{provider}/redirect', [VersionControlProviderController::class, 'redirect'])

@@ -333,3 +333,102 @@ mini_forge_ensure_www_data_readable() {
         fi
     fi
 }
+
+mini_forge_concat_pem() {
+    local dest="$1"
+    shift
+    : > "${dest}"
+
+    local file
+    for file in "$@"; do
+        [[ -f "${file}" ]] || continue
+        tr -d '\r' < "${file}" >> "${dest}"
+        if [[ -s "${dest}" && "$(tail -c1 "${dest}" | wc -l)" -eq 0 ]]; then
+            printf '\n' >> "${dest}"
+        fi
+    done
+}
+
+mini_forge_write_nginx_vhost() {
+    local domain="$1"
+    local config_b64="$2"
+    local available="/etc/nginx/sites-available/${domain}"
+    local enabled="/etc/nginx/sites-enabled/${domain}"
+    local backup=""
+
+    mini_forge_disable_default_nginx_site
+
+    if [[ -f "${available}" ]]; then
+        backup="$(mktemp)"
+        sudo -n cp "${available}" "${backup}"
+    fi
+
+    printf '%s' "${config_b64}" | base64 -d | sudo -n tee "${available}" >/dev/null
+    sudo -n ln -sfn "${available}" "${enabled}"
+
+    if ! sudo -n nginx -t; then
+        if [[ -n "${backup}" && -f "${backup}" ]]; then
+            sudo -n cp "${backup}" "${available}"
+            sudo -n nginx -t
+            mini_forge_reload_nginx || true
+        else
+            sudo -n rm -f "${enabled}"
+        fi
+        rm -f "${backup}"
+        mini_forge_fail "${STEP_KEY}" "nginx_test_failed" "Nginx configuration failed validation."
+    fi
+
+    mini_forge_reload_nginx
+    rm -f "${backup}"
+}
+
+mini_forge_ensure_acme_webroot() {
+    local webroot="${1:-/var/www/letsencrypt}"
+
+    sudo -n mkdir -p "${webroot}/.well-known/acme-challenge"
+    sudo -n chmod -R a+rX "${webroot}"
+}
+
+mini_forge_certificate_expires_at() {
+    local cert="$1"
+    local raw iso
+
+    raw="$(sudo -n openssl x509 -enddate -noout -in "${cert}" 2>/dev/null | cut -d= -f2- || true)"
+    [[ -n "${raw}" ]] || return 0
+    iso="$(date -u -d "${raw}" +"%Y-%m-%dT%H:%M:%SZ" 2>/dev/null || true)"
+    printf '%s' "${iso}"
+}
+
+mini_forge_set_app_url_scheme() {
+    local scheme="$1"
+    local domain="$2"
+    local env_file="${3:-}"
+
+    if [[ -z "${env_file}" ]]; then
+        env_file="${MF_ROOT_PATH:-}/shared/.env"
+    fi
+
+    [[ -f "${env_file}" ]] || return 0
+
+    SCHEME="${scheme}" DOMAIN="${domain}" ENV_FILE="${env_file}" python3 - <<'PY'
+import os, re
+
+scheme = os.environ["SCHEME"]
+domain = os.environ["DOMAIN"]
+path = os.environ["ENV_FILE"]
+
+with open(path, "r", encoding="utf-8") as handle:
+    text = handle.read()
+
+pattern = re.compile(
+    r'^(APP_URL=)(["\']?)https?://' + re.escape(domain) + r'(["\']?)\s*$',
+    re.M,
+)
+replacement = rf"\1\2{scheme}://{domain}\3"
+updated, count = pattern.subn(replacement, text, count=1)
+
+if count:
+    with open(path, "w", encoding="utf-8") as handle:
+        handle.write(updated)
+PY
+}
