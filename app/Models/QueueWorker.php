@@ -111,4 +111,83 @@ class QueueWorker extends Model
 
         return $status->isBusy();
     }
+
+    public function canUpdate(): bool
+    {
+        return in_array($this->status, [
+            QueueWorkerStatus::Installed,
+            QueueWorkerStatus::Failed,
+        ], true);
+    }
+
+    public function canRestart(): bool
+    {
+        return $this->status === QueueWorkerStatus::Installed;
+    }
+
+    public function canDelete(): bool
+    {
+        return in_array($this->status, [
+            QueueWorkerStatus::Installed,
+            QueueWorkerStatus::Failed,
+        ], true);
+    }
+
+    /**
+     * @return list<string>
+     */
+    public static function operationTypes(): array
+    {
+        return [
+            'install_queue_worker',
+            'update_queue_worker',
+            'restart_queue_worker',
+            'graceful_restart_queue_worker',
+            'delete_queue_worker',
+        ];
+    }
+
+    /**
+     * @return array{
+     *     name: string,
+     *     connection: string,
+     *     queue: string,
+     *     php_version: string,
+     *     processes: int,
+     *     sleep: int,
+     *     timeout: int,
+     *     tries: int,
+     *     backoff: int,
+     *     max_jobs: int,
+     *     max_time: int,
+     *     stopwaitsecs: int,
+     *     restart_on_deploy: bool,
+     *     status: string,
+     *     failure_message: string|null
+     * }
+     */
+    public function snapshotAttributes(): array
+    {
+        $status = $this->status instanceof QueueWorkerStatus
+            ? $this->status
+            : QueueWorkerStatus::from((string) $this->status);
+
+        return [
+            'name' => $this->name,
+            'connection' => $this->connection,
+            'queue' => $this->queue,
+            'php_version' => $this->php_version,
+            'processes' => (int) $this->processes,
+            'sleep' => (int) $this->sleep,
+            'timeout' => (int) $this->timeout,
+            'tries' => (int) $this->tries,
+            'backoff' => (int) $this->backoff,
+            'max_jobs' => (int) $this->max_jobs,
+            'max_time' => (int) $this->max_time,
+            'stopwaitsecs' => (int) $this->stopwaitsecs,
+            'restart_on_deploy' => (bool) $this->restart_on_deploy,
+            'status' => $status->value,
+            'failure_message' => $this->failure_message,
+        ];
+    }
 }

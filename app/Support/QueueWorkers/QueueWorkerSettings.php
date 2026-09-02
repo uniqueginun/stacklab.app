@@ -45,6 +45,10 @@ final class QueueWorkerSettings
 
     public const string QueueNamePattern = '/^[A-Za-z0-9._-]+$/';
 
+    public const int LogMaxLines = 200;
+
+    public const int LogMaxBytes = 65_536;
+
     /**
      * @return list<string>
      */

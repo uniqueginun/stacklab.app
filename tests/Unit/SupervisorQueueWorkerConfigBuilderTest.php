@@ -60,11 +60,14 @@ test('it rejects unsafe supervisor configuration values', function (array $overr
 
 test('the install recipe applies a generated supervisor file and verifies the process group', function () {
     $recipe = file_get_contents(resource_path('recipes/queue_worker.install@v1.sh'));
+    $library = file_get_contents(resource_path('recipes/_lib.sh'));
 
     expect($recipe)
         ->toContain('supervisorctl reread')
         ->toContain('supervisorctl update')
-        ->toContain('supervisorctl status')
+        ->toContain('mini_forge_supervisor_wait_running')
         ->toContain('MF_SUPERVISOR_CONFIG_B64')
-        ->not->toContain('php artisan queue:work');
+        ->not->toContain('php artisan queue:work')
+        ->and($library)
+        ->toContain('supervisorctl status');
 });

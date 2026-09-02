@@ -72,13 +72,9 @@ const serverTabs = computed(() => {
     const overview = props.serverUuid
         ? serverShow(props.serverUuid)
         : serversIndex();
-    const sites = props.serverUuid
-        ? `${serverShow.url(props.serverUuid)}#sites`
-        : `${serversIndex().url}#sites`;
 
     return [
         { label: 'Overview', href: overview, key: 'overview' },
-        { label: 'Sites', href: sites, key: 'sites' },
         {
             label: 'Databases',
             href: props.serverUuid

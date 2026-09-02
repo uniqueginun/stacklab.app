@@ -4,6 +4,9 @@ import { Check } from '@lucide/vue';
 import { ref } from 'vue';
 import InputError from '@/components/InputError.vue';
 import PasswordInput from '@/components/PasswordInput.vue';
+import TermsModal, {
+    type LegalDocument,
+} from '@/components/stacklab/TermsModal.vue';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
@@ -25,6 +28,13 @@ defineOptions({
 });
 
 const agreed = ref(false);
+const showLegal = ref(false);
+const legalDocument = ref<LegalDocument>('terms');
+
+const openLegal = (document: LegalDocument) => {
+    legalDocument.value = document;
+    showLegal.value = true;
+};
 
 const features = [
     'SSH-first server provisioning',
@@ -116,34 +126,51 @@ const features = [
                 <InputError :message="errors.password_confirmation" />
             </div>
 
-            <Label
-                for="terms"
-                class="flex items-start gap-2 text-sm font-normal text-neutral-500"
-            >
-                <Checkbox
-                    id="terms"
-                    :tabindex="5"
-                    :checked="agreed"
-                    class="mt-0.5 border-neutral-300 data-[state=checked]:border-brand data-[state=checked]:bg-brand data-[state=checked]:text-white"
-                    @update:checked="agreed = $event === true"
+            <div class="grid gap-2">
+                <Label
+                    for="terms"
+                    class="flex items-start gap-2 text-sm font-normal text-neutral-500"
+                >
+                    <Checkbox
+                        id="terms"
+                        :tabindex="5"
+                        :checked="agreed"
+                        class="mt-0.5 border-neutral-300 data-[state=checked]:border-brand data-[state=checked]:bg-brand data-[state=checked]:text-white"
+                        @update:checked="agreed = $event === true"
+                    />
+                    <span>
+                        I agree to the
+                        <button
+                            type="button"
+                            class="text-brand hover:text-brand/80"
+                            @click.prevent.stop="openLegal('terms')"
+                        >
+                            Terms of Service
+                        </button>
+                        and
+                        <button
+                            type="button"
+                            class="text-brand hover:text-brand/80"
+                            @click.prevent.stop="openLegal('privacy')"
+                        >
+                            Privacy Policy
+                        </button>
+                        .
+                    </span>
+                </Label>
+                <input
+                    type="hidden"
+                    name="terms"
+                    :value="agreed ? '1' : '0'"
                 />
-                <span>
-                    I agree to the
-                    <a href="#" class="text-brand hover:text-brand/80"
-                        >Terms of Service</a
-                    >
-                    and
-                    <a href="#" class="text-brand hover:text-brand/80"
-                        >Privacy Policy</a
-                    >.
-                </span>
-            </Label>
+                <InputError :message="errors.terms" />
+            </div>
 
             <Button
                 type="submit"
                 class="h-11 w-full rounded-lg bg-brand text-white hover:bg-brand/90"
                 tabindex="6"
-                :disabled="processing"
+                :disabled="processing || !agreed"
                 data-test="register-user-button"
             >
                 <Spinner v-if="processing" />
@@ -174,4 +201,10 @@ const features = [
             >Sign in</Link
         >
     </p>
+
+    <TermsModal
+        v-model:open="showLegal"
+        :document="legalDocument"
+        @accept="agreed = true"
+    />
 </template>

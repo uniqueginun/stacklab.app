@@ -14,9 +14,11 @@ use App\Http\Resources\SitesShowResource;
 use App\Models\Release;
 use App\Models\Server;
 use App\Models\Site;
+use App\Models\User;
 use App\Support\QueueWorkers\QueueWorkerSettings;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Gate;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -25,7 +27,8 @@ class SitesController extends Controller
 {
     public function index(Request $request): Response
     {
-        $sites = $request->user()
+        $user = $request->user();
+        $sites = $user
             ->sites()
             ->with('server')
             ->latest()
@@ -33,19 +36,22 @@ class SitesController extends Controller
 
         return inertia('sites/Index', [
             'sites' => SitesIndexResource::collection($sites)->resolve(),
+            'can_create_sites' => $this->provisionedServersFor($user)->isNotEmpty(),
         ]);
     }
 
-    public function create(Request $request): Response
+    public function create(Request $request): Response|RedirectResponse
     {
-        $servers = $request->user()
-            ->servers()
-            ->where('connection_status', ConnectionStatus::CONNECTED)
-            ->whereNotNull('profile')
-            ->latest()
-            ->get()
-            ->filter(fn (Server $server) => $server->isConnected() && $server->isProvisioned())
-            ->values();
+        $servers = $this->provisionedServersFor($request->user());
+
+        if ($servers->isEmpty()) {
+            Inertia::flash('toast', [
+                'type' => 'error',
+                'message' => __('Provision a connected server before creating a site.'),
+            ]);
+
+            return to_route('servers.index');
+        }
 
         $selected = $request->string('server')->toString();
 
@@ -139,6 +145,20 @@ class SitesController extends Controller
         Inertia::flash('toast', ['type' => 'success', 'message' => __('Site deleted successfully.')]);
 
         return to_route('sites.index');
+    }
+
+    /**
+     * @return Collection<int, Server>
+     */
+    private function provisionedServersFor(User $user): Collection
+    {
+        return $user->servers()
+            ->where('connection_status', ConnectionStatus::CONNECTED)
+            ->whereNotNull('profile')
+            ->latest()
+            ->get()
+            ->filter(fn (Server $server) => $server->isConnected() && $server->isProvisioned())
+            ->values();
     }
 
     private function renderShow(Request $request, Site $site, string $tab): Response

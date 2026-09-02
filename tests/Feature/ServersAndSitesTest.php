@@ -163,6 +163,7 @@ test('the sites index can be rendered', function () {
         ->assertInertia(fn (Assert $page) => $page
             ->component('sites/Index')
             ->has('sites', 0)
+            ->where('can_create_sites', false)
         );
 });
 
@@ -180,11 +181,13 @@ test('the sites index only lists the authenticated users sites', function () {
             ->has('sites', 1)
             ->where('sites.0.uuid', $site->uuid)
             ->where('sites.0.domain', 'mine.test')
+            ->where('can_create_sites', true)
         );
 });
 
 test('the create site page can be rendered without a site type', function () {
     $user = User::factory()->create();
+    Server::factory()->for($user)->provisioned()->create();
 
     $this->actingAs($user)
         ->get(route('sites.create'))
@@ -193,12 +196,13 @@ test('the create site page can be rendered without a site type', function () {
             ->component('sites/Create')
             ->where('type', null)
             ->where('server', null)
-            ->has('servers', 0)
+            ->has('servers', 1)
         );
 });
 
 test('the create site page accepts an optional site type', function () {
     $user = User::factory()->create();
+    Server::factory()->for($user)->provisioned()->create();
 
     $this->actingAs($user)
         ->get(route('sites.create', ['type' => 'PHP']))
@@ -207,6 +211,19 @@ test('the create site page accepts an optional site type', function () {
             ->component('sites/Create')
             ->where('type', 'PHP')
         );
+});
+
+test('the create site page redirects when the user has no provisioned servers', function () {
+    $user = User::factory()->create();
+    Server::factory()->for($user)->connected()->create();
+
+    $this->actingAs($user)
+        ->get(route('sites.create'))
+        ->assertRedirect(route('servers.index'))
+        ->assertInertiaFlash('toast', [
+            'type' => 'error',
+            'message' => 'Provision a connected server before creating a site.',
+        ]);
 });
 
 test('the create site page lists only the users provisioned servers', function () {

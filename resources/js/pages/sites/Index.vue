@@ -6,6 +6,7 @@ import EmptyState from '@/components/stacklab/EmptyState.vue';
 import SiteTypeModal from '@/components/stacklab/SiteTypeModal.vue';
 import StatusBadge from '@/components/stacklab/StatusBadge.vue';
 import { Button } from '@/components/ui/button';
+import { index as serversIndex } from '@/routes/servers';
 import { show as siteShow } from '@/routes/sites';
 import type { SiteIndex } from '@/types';
 
@@ -18,6 +19,7 @@ defineOptions({
 
 const props = defineProps<{
     sites: SiteIndex[];
+    can_create_sites: boolean;
 }>();
 
 const showSiteTypes = ref(false);
@@ -44,25 +46,52 @@ const subtitle = computed(() => {
             <p class="mt-1 text-sm text-neutral-500">{{ subtitle }}</p>
         </div>
         <Button
+            v-if="can_create_sites"
             class="h-10 rounded-lg bg-brand px-4 text-white hover:bg-brand/90"
             @click="showSiteTypes = true"
         >
             <Plus class="size-4" />
             Create site
         </Button>
+        <Button
+            v-else
+            as-child
+            class="h-10 rounded-lg bg-brand px-4 text-white hover:bg-brand/90"
+        >
+            <Link :href="serversIndex()">
+                <Plus class="size-4" />
+                Add a server
+            </Link>
+        </Button>
     </div>
 
     <EmptyState
         v-if="sites.length === 0"
         title="No sites yet"
-        description="Create a site on a provisioned server, then connect GitHub to ship a release."
-        :steps="['Pick a server', 'Create the site', 'Deploy from GitHub']"
+        :description="
+            can_create_sites
+                ? 'Create a site on a provisioned server, then connect GitHub to ship a release.'
+                : 'Provision a connected server before creating a site.'
+        "
+        :steps="
+            can_create_sites
+                ? ['Pick a server', 'Create the site', 'Deploy from GitHub']
+                : ['Add a server', 'Confirm SSH', 'Provision the stack']
+        "
     >
         <Button
+            v-if="can_create_sites"
             class="h-10 rounded-lg bg-brand px-4 text-white hover:bg-brand/90"
             @click="showSiteTypes = true"
         >
             Create site
+        </Button>
+        <Button
+            v-else
+            as-child
+            class="h-10 rounded-lg bg-brand px-4 text-white hover:bg-brand/90"
+        >
+            <Link :href="serversIndex()">View servers</Link>
         </Button>
     </EmptyState>
 
@@ -99,5 +128,8 @@ const subtitle = computed(() => {
         </Link>
     </div>
 
-    <SiteTypeModal v-model:open="showSiteTypes" />
+    <SiteTypeModal
+        v-if="can_create_sites"
+        v-model:open="showSiteTypes"
+    />
 </template>

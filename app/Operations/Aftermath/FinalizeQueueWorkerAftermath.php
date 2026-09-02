@@ -28,21 +28,80 @@ final class FinalizeQueueWorkerAftermath implements HandlesFailedOperation, Step
             return;
         }
 
-        $this->worker($operation)?->forceFill([
+        $worker = $this->worker($operation);
+
+        if ($worker === null) {
+            return;
+        }
+
+        if ($operation->type === 'delete_queue_worker') {
+            $worker->delete();
+
+            return;
+        }
+
+        $worker->forceFill([
             'status' => QueueWorkerStatus::Installed,
             'failure_message' => null,
-            'installed_at' => now(),
+            'installed_at' => in_array($operation->type, ['install_queue_worker', 'update_queue_worker'], true)
+                ? now()
+                : ($worker->installed_at ?? now()),
         ])->save();
     }
 
     public function failed(Operation $operation, ?string $message): void
     {
-        if ($operation->type !== 'install_queue_worker') {
+        $worker = $this->worker($operation);
+
+        if ($worker === null) {
             return;
         }
 
-        $this->worker($operation)?->forceFill([
-            'status' => QueueWorkerStatus::Failed,
+        match ($operation->type) {
+            'install_queue_worker' => $worker->forceFill([
+                'status' => QueueWorkerStatus::Failed,
+                'failure_message' => $message,
+            ])->save(),
+            'update_queue_worker', 'delete_queue_worker' => $this->restorePrevious($worker, $operation, $message),
+            'restart_queue_worker', 'graceful_restart_queue_worker' => $worker->forceFill([
+                'status' => QueueWorkerStatus::Installed,
+                'failure_message' => $message,
+            ])->save(),
+            default => null,
+        };
+    }
+
+    private function restorePrevious(QueueWorker $worker, Operation $operation, ?string $message): void
+    {
+        $snapshot = data_get($operation->plan_snapshot, 'previous');
+
+        if (! is_array($snapshot)) {
+            $worker->forceFill([
+                'status' => QueueWorkerStatus::Failed,
+                'failure_message' => $message,
+            ])->save();
+
+            return;
+        }
+
+        $status = QueueWorkerStatus::tryFrom((string) ($snapshot['status'] ?? ''))
+            ?? QueueWorkerStatus::Failed;
+
+        $worker->forceFill([
+            'name' => $snapshot['name'] ?? $worker->name,
+            'connection' => $snapshot['connection'] ?? $worker->connection,
+            'queue' => $snapshot['queue'] ?? $worker->queue,
+            'php_version' => $snapshot['php_version'] ?? $worker->php_version,
+            'processes' => (int) ($snapshot['processes'] ?? $worker->processes),
+            'sleep' => (int) ($snapshot['sleep'] ?? $worker->sleep),
+            'timeout' => (int) ($snapshot['timeout'] ?? $worker->timeout),
+            'tries' => (int) ($snapshot['tries'] ?? $worker->tries),
+            'backoff' => (int) ($snapshot['backoff'] ?? $worker->backoff),
+            'max_jobs' => (int) ($snapshot['max_jobs'] ?? $worker->max_jobs),
+            'max_time' => (int) ($snapshot['max_time'] ?? $worker->max_time),
+            'stopwaitsecs' => (int) ($snapshot['stopwaitsecs'] ?? $worker->stopwaitsecs),
+            'restart_on_deploy' => (bool) ($snapshot['restart_on_deploy'] ?? $worker->restart_on_deploy),
+            'status' => $status,
             'failure_message' => $message,
         ])->save();
     }

@@ -126,7 +126,44 @@ mini_forge_php_packages() {
         "php${version}-zip" \
         "php${version}-mysql" \
         "php${version}-sqlite3" \
-        "php${version}-bcmath"
+        "php${version}-bcmath" \
+        "php${version}-redis"
+}
+
+mini_forge_php_has_redis() {
+    local php_bin="$1"
+
+    [[ -n "${php_bin}" ]] && "${php_bin}" -r 'exit(extension_loaded("redis") ? 0 : 1);' >/dev/null 2>&1
+}
+
+mini_forge_ensure_php_redis() {
+    local php_bin="${1:-${MF_PHP_BINARY:-}}"
+    local version="${2:-${MF_PHP_VERSION:-}}"
+
+    if [[ -z "${php_bin}" ]]; then
+        mini_forge_fail "${STEP_KEY}" "missing_php_binary" "The PHP binary path is invalid."
+    fi
+
+    if mini_forge_php_has_redis "${php_bin}"; then
+        return 0
+    fi
+
+    if [[ -z "${version}" && "${php_bin}" =~ php([0-9]+\.[0-9]+)$ ]]; then
+        version="${BASH_REMATCH[1]}"
+    fi
+
+    if [[ ! "${version}" =~ ^[0-9]+\.[0-9]+$ ]]; then
+        mini_forge_fail "${STEP_KEY}" "invalid_php_version" "The PHP version is invalid."
+    fi
+
+    mini_forge_enable_php_repo
+    mini_forge_apt_update
+    mini_forge_apt_install "php${version}-redis"
+    sudo -n phpenmod -v "${version}" redis >/dev/null 2>&1 || true
+
+    if ! mini_forge_php_has_redis "${php_bin}"; then
+        mini_forge_fail "${STEP_KEY}" "php_redis_missing" "PHP ${version} does not have the Redis extension."
+    fi
 }
 
 mini_forge_resolve_php_version() {
@@ -431,4 +468,59 @@ if count:
     with open(path, "w", encoding="utf-8") as handle:
         handle.write(updated)
 PY
+}
+
+mini_forge_assert_queue_worker_program() {
+    local program="$1"
+
+    if [[ ! "${program}" =~ ^stacklab-site-[0-9]+-worker-[0-9]+$ ]]; then
+        mini_forge_fail "${STEP_KEY}" "invalid_program" "The Supervisor program name is invalid."
+    fi
+}
+
+mini_forge_assert_queue_worker_config_path() {
+    local program="$1"
+    local path="$2"
+
+    mini_forge_assert_queue_worker_program "${program}"
+
+    if [[ "${path}" != "/etc/supervisor/conf.d/${program}.conf" ]]; then
+        mini_forge_fail "${STEP_KEY}" "invalid_config_path" "The Supervisor configuration path is invalid."
+    fi
+}
+
+mini_forge_supervisor_running_count() {
+    local program="$1"
+    local status_output
+
+    status_output="$(sudo -n supervisorctl status "${program}:*" 2>&1 || true)"
+    printf '%s\n' "${status_output}" | grep -cE '[[:space:]]RUNNING[[:space:]]' || true
+}
+
+mini_forge_supervisor_wait_running() {
+    local program="$1"
+    local expected="$2"
+    local running=0
+
+    for _ in 1 2 3 4 5 6 7 8; do
+        running="$(mini_forge_supervisor_running_count "${program}")"
+
+        if [[ "${running}" -eq "${expected}" ]]; then
+            printf '%s' "${running}"
+            return 0
+        fi
+
+        sleep 1
+    done
+
+    printf '%s' "${running}"
+    return 1
+}
+
+mini_forge_supervisor_program_missing() {
+    local program="$1"
+    local status_output
+
+    status_output="$(sudo -n supervisorctl status "${program}:*" 2>&1 || true)"
+    printf '%s' "${status_output}" | grep -qiE 'no such process|ERROR:'
 }

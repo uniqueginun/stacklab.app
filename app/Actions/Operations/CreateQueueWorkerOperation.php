@@ -2,26 +2,24 @@
 
 namespace App\Actions\Operations;
 
+use App\Actions\Operations\Concerns\DispatchesQueueWorkerOperations;
 use App\Enums\QueueWorkerStatus;
-use App\Enums\SiteStatus;
 use App\Jobs\ProcessOperation;
 use App\Models\Operation;
 use App\Models\QueueWorker;
 use App\Models\Site;
 use App\Models\User;
 use App\Operations\Aftermath\FinalizeQueueWorkerAftermath;
-use App\Support\QueueWorkers\QueueWorkerCommandBuilder;
-use App\Support\QueueWorkers\SupervisorQueueWorkerConfigBuilder;
+use App\Support\QueueWorkers\QueueWorkerRecipe;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
 class CreateQueueWorkerOperation
 {
-    public function __construct(
-        private QueueWorkerCommandBuilder $commands,
-        private SupervisorQueueWorkerConfigBuilder $supervisor,
-    ) {}
+    use DispatchesQueueWorkerOperations;
+
+    public function __construct(private QueueWorkerRecipe $recipe) {}
 
     /**
      * @param  array{
@@ -62,42 +60,8 @@ class CreateQueueWorkerOperation
                 'failure_message' => null,
             ]);
 
-            $command = $this->commands->build([
-                'connection' => $worker->connection,
-                'queue' => $worker->queue,
-                'php_version' => $worker->php_version,
-                'sleep' => (int) $worker->sleep,
-                'timeout' => (int) $worker->timeout,
-                'tries' => (int) $worker->tries,
-                'backoff' => (int) $worker->backoff,
-                'max_jobs' => (int) $worker->max_jobs,
-                'max_time' => (int) $worker->max_time,
-                'artisan_path' => $worker->artisanPath(),
-            ]);
-
-            $config = $this->supervisor->build([
-                'program' => $worker->supervisorProgram(),
-                'command' => $command,
-                'directory' => $worker->workingDirectory(),
-                'user' => (string) $server->ssh_user,
-                'processes' => (int) $worker->processes,
-                'stopwaitsecs' => (int) $worker->stopwaitsecs,
-                'stdout_logfile' => $worker->stdoutLogPath(),
-            ]);
-
-            $args = [
-                'root_path' => $lockedSite->root_path,
-                'php_version' => $worker->php_version,
-                'php_binary' => $this->commands->phpBinaryPath($worker->php_version),
-                'artisan_path' => $worker->artisanPath(),
-                'site_user' => $server->ssh_user,
-                'processes' => (string) $worker->processes,
-                'supervisor_program' => $worker->supervisorProgram(),
-                'supervisor_config_path' => $worker->supervisorConfigPath(),
-                'supervisor_config_b64' => base64_encode($config),
-                'worker_log_path' => $worker->stdoutLogPath(),
-                'queue_worker_id' => $worker->id,
-            ];
+            $worker->setRelation('site', $lockedSite);
+            $args = $this->recipe->arguments($worker);
 
             $steps = [
                 [
@@ -141,46 +105,5 @@ class CreateQueueWorkerOperation
         ProcessOperation::dispatch($operation->getKey());
 
         return $worker;
-    }
-
-    private function assertSiteReady(Site $site): void
-    {
-        if (! $site->isLaravel()) {
-            throw ValidationException::withMessages([
-                'site' => 'Queue workers can only be created for Laravel sites.',
-            ]);
-        }
-
-        if ($site->status !== SiteStatus::DEPLOYED) {
-            throw ValidationException::withMessages([
-                'site' => 'Deploy the site before creating a queue worker.',
-            ]);
-        }
-
-        if ($site->current_release_id === null) {
-            throw ValidationException::withMessages([
-                'site' => 'Deploy the site before creating a queue worker.',
-            ]);
-        }
-
-        if (! $site->hasUsableRootPath()) {
-            throw ValidationException::withMessages([
-                'site' => 'The site path is not ready yet.',
-            ]);
-        }
-
-        $site->loadMissing('server');
-
-        if (! $site->server->isConnected()) {
-            throw ValidationException::withMessages([
-                'site' => 'Verify the server SSH connection before creating a queue worker.',
-            ]);
-        }
-
-        if (! is_string($site->server->ssh_user) || preg_match('/^[a-z_][a-z0-9_-]{0,31}$/', $site->server->ssh_user) !== 1) {
-            throw ValidationException::withMessages([
-                'site' => 'The server SSH user cannot be used to run queue workers.',
-            ]);
-        }
     }
 }

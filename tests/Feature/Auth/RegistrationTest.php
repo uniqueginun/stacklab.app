@@ -19,6 +19,7 @@ test('new users can register', function () {
         'email' => 'test@example.com',
         'password' => 'password',
         'password_confirmation' => 'password',
+        'terms' => '1',
     ]);
 
     $this->assertAuthenticated();
@@ -30,6 +31,7 @@ test('new users cannot register without confirming their password', function () 
         'name' => 'Test User',
         'email' => 'test@example.com',
         'password' => 'password',
+        'terms' => '1',
     ]);
 
     $this->assertGuest();
@@ -42,8 +44,21 @@ test('new users cannot register with a mismatched password confirmation', functi
         'email' => 'test@example.com',
         'password' => 'password',
         'password_confirmation' => 'different-password',
+        'terms' => '1',
     ]);
 
     $this->assertGuest();
     $response->assertSessionHasErrors('password');
+});
+
+test('new users cannot register without agreeing to the terms', function () {
+    $response = $this->from(route('register'))->post(route('register.store'), [
+        'name' => 'Test User',
+        'email' => 'test@example.com',
+        'password' => 'password',
+        'password_confirmation' => 'password',
+    ]);
+
+    $this->assertGuest();
+    $response->assertSessionHasErrors('terms');
 });

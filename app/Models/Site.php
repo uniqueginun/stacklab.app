@@ -120,7 +120,7 @@ class Site extends Model
     public function latestQueueWorkerOperation(): ?Operation
     {
         return Operation::query()
-            ->where('type', 'install_queue_worker')
+            ->whereIn('type', QueueWorker::operationTypes())
             ->where('server_id', $this->server_id)
             ->where('plan_snapshot->site_id', $this->id)
             ->with(['steps' => fn ($query) => $query->orderBy('position')])

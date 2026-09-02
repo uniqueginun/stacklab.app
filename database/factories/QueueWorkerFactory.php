@@ -62,4 +62,25 @@ class QueueWorkerFactory extends Factory
             'failure_message' => 'Unable to install the queue worker.',
         ]);
     }
+
+    public function updating(): static
+    {
+        return $this->state(fn (): array => [
+            'status' => QueueWorkerStatus::Updating,
+        ]);
+    }
+
+    public function restarting(): static
+    {
+        return $this->state(fn (): array => [
+            'status' => QueueWorkerStatus::Restarting,
+        ]);
+    }
+
+    public function deleting(): static
+    {
+        return $this->state(fn (): array => [
+            'status' => QueueWorkerStatus::Deleting,
+        ]);
+    }
 }

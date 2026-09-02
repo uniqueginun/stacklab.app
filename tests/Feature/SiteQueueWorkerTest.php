@@ -372,3 +372,561 @@ test('a user cannot query queue worker status for another users site', function 
         ->getJson(route('sites.queue-workers.status', $site))
         ->assertForbidden();
 });
+
+test('updating a worker regenerates the supervisor config for the exact program', function () {
+    Queue::fake();
+
+    [$user, $server, $site] = queueWorkerSite();
+    $worker = QueueWorker::factory()->for($site)->installed()->create([
+        'name' => 'emails-worker',
+        'php_version' => '8.4',
+        'processes' => 1,
+        'queue' => 'emails',
+    ]);
+
+    $this->actingAs($user)
+        ->put(route('sites.queue-workers.update', [$site, $worker]), validWorkerPayload([
+            'processes' => 3,
+        ]))
+        ->assertRedirect(route('sites.queues', $site));
+
+    $worker->refresh();
+    $operation = $server->operations()->where('type', 'update_queue_worker')->first();
+
+    expect($worker->status)->toBe(QueueWorkerStatus::Updating)
+        ->and($worker->processes)->toBe(3)
+        ->and($operation)->not->toBeNull()
+        ->and($operation->steps->pluck('recipe')->all())->toBe([
+            'queue_worker.update@v1',
+        ]);
+
+    $args = $operation->steps->first()->arguments;
+    $config = base64_decode((string) $args['supervisor_config_b64']);
+
+    expect($args['supervisor_program'])->toBe($worker->supervisorProgram())
+        ->and($args['supervisor_config_path'])->toBe($worker->supervisorConfigPath())
+        ->and($config)
+        ->toContain('[program:'.$args['supervisor_program'].']')
+        ->toContain('numprocs=3');
+
+    Queue::assertPushed(ProcessOperation::class, fn (ProcessOperation $job): bool => $job->operationId === $operation->id);
+});
+
+test('a worker can keep its own name when updating', function () {
+    Queue::fake();
+
+    [$user, $server, $site] = queueWorkerSite();
+    $worker = QueueWorker::factory()->for($site)->installed()->create([
+        'name' => 'emails-worker',
+        'queue' => 'default',
+        'php_version' => '8.4',
+    ]);
+
+    $this->actingAs($user)
+        ->put(route('sites.queue-workers.update', [$site, $worker]), validWorkerPayload([
+            'queue' => 'emails',
+        ]))
+        ->assertRedirect(route('sites.queues', $site))
+        ->assertSessionDoesntHaveErrors();
+});
+
+test('worker names must stay unique on a site when updating', function () {
+    [$user, $server, $site] = queueWorkerSite();
+    QueueWorker::factory()->for($site)->installed()->create(['name' => 'taken']);
+    $worker = QueueWorker::factory()->for($site)->installed()->create([
+        'name' => 'emails-worker',
+        'php_version' => '8.4',
+    ]);
+
+    $this->actingAs($user)
+        ->from(route('sites.queues', $site))
+        ->put(route('sites.queue-workers.update', [$site, $worker]), validWorkerPayload([
+            'name' => 'taken',
+        ]))
+        ->assertRedirect(route('sites.queues', $site))
+        ->assertSessionHasErrors(['name']);
+});
+
+test('renaming a worker or toggling restart on deploy skips ssh', function () {
+    Queue::fake();
+
+    [$user, $server, $site] = queueWorkerSite();
+    $worker = QueueWorker::factory()->for($site)->installed()->create([
+        'name' => 'emails-worker',
+        'connection' => 'redis',
+        'queue' => 'emails',
+        'php_version' => '8.4',
+        'processes' => 3,
+        'restart_on_deploy' => true,
+    ]);
+
+    $this->actingAs($user)
+        ->put(route('sites.queue-workers.update', [$site, $worker]), validWorkerPayload([
+            'name' => 'renamed-worker',
+            'restart_on_deploy' => false,
+        ]))
+        ->assertRedirect(route('sites.queues', $site));
+
+    $worker->refresh();
+
+    expect($worker->name)->toBe('renamed-worker')
+        ->and($worker->restart_on_deploy)->toBeFalse()
+        ->and($worker->status)->toBe(QueueWorkerStatus::Installed)
+        ->and($server->operations()->where('type', 'update_queue_worker')->exists())->toBeFalse();
+
+    Queue::assertNothingPushed();
+});
+
+test('a busy worker cannot be updated', function () {
+    [$user, $server, $site] = queueWorkerSite();
+    $worker = QueueWorker::factory()->for($site)->installing()->create([
+        'name' => 'emails-worker',
+        'php_version' => '8.4',
+    ]);
+
+    $this->actingAs($user)
+        ->from(route('sites.queues', $site))
+        ->put(route('sites.queue-workers.update', [$site, $worker]), validWorkerPayload())
+        ->assertRedirect(route('sites.queues', $site))
+        ->assertSessionHasErrors(['queue_worker']);
+});
+
+test('a site cannot update a worker while another server operation is running', function () {
+    [$user, $server, $site] = queueWorkerSite();
+    $worker = QueueWorker::factory()->for($site)->installed()->create([
+        'name' => 'emails-worker',
+        'php_version' => '8.4',
+    ]);
+    $server->operations()->create([
+        'user_id' => $user->id,
+        'type' => 'provision',
+        'status' => 'running',
+        'plan_snapshot' => [],
+    ]);
+
+    $this->actingAs($user)
+        ->from(route('sites.queues', $site))
+        ->put(route('sites.queue-workers.update', [$site, $worker]), validWorkerPayload([
+            'processes' => 2,
+        ]))
+        ->assertRedirect(route('sites.queues', $site))
+        ->assertSessionHasErrors(['site']);
+});
+
+test('the owner can restart an installed worker', function () {
+    Queue::fake();
+
+    [$user, $server, $site] = queueWorkerSite();
+    $worker = QueueWorker::factory()->for($site)->installed()->create([
+        'php_version' => '8.4',
+        'processes' => 2,
+    ]);
+
+    $this->actingAs($user)
+        ->post(route('sites.queue-workers.restart', [$site, $worker]))
+        ->assertRedirect(route('sites.queues', $site));
+
+    $worker->refresh();
+    $operation = $server->operations()->where('type', 'restart_queue_worker')->first();
+
+    expect($worker->status)->toBe(QueueWorkerStatus::Restarting)
+        ->and($operation)->not->toBeNull()
+        ->and($operation->steps->pluck('recipe')->all())->toBe(['queue_worker.restart@v1'])
+        ->and($operation->steps->first()->arguments['supervisor_program'])->toBe($worker->supervisorProgram())
+        ->and($operation->steps->first()->arguments['supervisor_config_path'])->toBe($worker->supervisorConfigPath());
+});
+
+test('the owner can graceful restart an installed worker', function () {
+    Queue::fake();
+
+    [$user, $server, $site] = queueWorkerSite();
+    $worker = QueueWorker::factory()->for($site)->installed()->create([
+        'php_version' => '8.4',
+    ]);
+
+    $this->actingAs($user)
+        ->post(route('sites.queue-workers.graceful-restart', [$site, $worker]))
+        ->assertRedirect(route('sites.queues', $site));
+
+    $operation = $server->operations()->where('type', 'graceful_restart_queue_worker')->first();
+
+    expect($worker->fresh()->status)->toBe(QueueWorkerStatus::Restarting)
+        ->and($operation->steps->pluck('recipe')->all())->toBe(['queue_worker.graceful_restart@v1'])
+        ->and($operation->steps->first()->arguments['artisan_path'])->toBe($worker->artisanPath())
+        ->and($operation->steps->first()->arguments['php_binary'])->toBe('/usr/bin/php8.4');
+});
+
+test('deleting a worker targets only that supervisor program', function () {
+    Queue::fake();
+
+    [$user, $server, $site] = queueWorkerSite();
+    $worker = QueueWorker::factory()->for($site)->installed()->create(['php_version' => '8.4']);
+    $other = QueueWorker::factory()->for($site)->installed()->create(['php_version' => '8.4']);
+
+    $this->actingAs($user)
+        ->delete(route('sites.queue-workers.destroy', [$site, $worker]))
+        ->assertRedirect(route('sites.queues', $site));
+
+    $operation = $server->operations()->where('type', 'delete_queue_worker')->first();
+    $args = $operation->steps->first()->arguments;
+
+    expect($worker->fresh()->status)->toBe(QueueWorkerStatus::Deleting)
+        ->and($other->fresh()->status)->toBe(QueueWorkerStatus::Installed)
+        ->and($operation->steps->pluck('recipe')->all())->toBe(['queue_worker.delete@v1'])
+        ->and($args['supervisor_program'])->toBe($worker->supervisorProgram())
+        ->and($args['supervisor_program'])->not->toBe($other->supervisorProgram())
+        ->and($args['supervisor_config_path'])->toBe($worker->supervisorConfigPath())
+        ->and($args['supervisor_config_path'])->not->toBe($other->supervisorConfigPath());
+});
+
+test('a failed worker can be deleted', function () {
+    Queue::fake();
+
+    [$user, $server, $site] = queueWorkerSite();
+    $worker = QueueWorker::factory()->for($site)->failed()->create(['php_version' => '8.4']);
+
+    $this->actingAs($user)
+        ->delete(route('sites.queue-workers.destroy', [$site, $worker]))
+        ->assertRedirect(route('sites.queues', $site));
+
+    expect($worker->fresh()->status)->toBe(QueueWorkerStatus::Deleting);
+});
+
+test('a user cannot manage another users queue worker', function () {
+    $user = User::factory()->create();
+    $site = Site::factory()->deployed()->create();
+    $worker = QueueWorker::factory()->for($site)->installed()->create();
+
+    $this->actingAs($user)
+        ->put(route('sites.queue-workers.update', [$site, $worker]), validWorkerPayload())
+        ->assertForbidden();
+
+    $this->actingAs($user)
+        ->post(route('sites.queue-workers.restart', [$site, $worker]))
+        ->assertForbidden();
+
+    $this->actingAs($user)
+        ->delete(route('sites.queue-workers.destroy', [$site, $worker]))
+        ->assertForbidden();
+});
+
+test('a queue worker from another site cannot be managed through scoped bindings', function () {
+    [$user, $server, $site] = queueWorkerSite();
+    $other = QueueWorker::factory()->installed()->create();
+
+    $this->actingAs($user)
+        ->put(route('sites.queue-workers.update', [$site, $other]), validWorkerPayload())
+        ->assertNotFound();
+
+    $this->actingAs($user)
+        ->post(route('sites.queue-workers.restart', [$site, $other]))
+        ->assertNotFound();
+
+    $this->actingAs($user)
+        ->delete(route('sites.queue-workers.destroy', [$site, $other]))
+        ->assertNotFound();
+});
+
+test('a successful update operation marks the worker installed', function () {
+    [$user, $server, $site] = queueWorkerSite();
+    $worker = QueueWorker::factory()->for($site)->updating()->create([
+        'php_version' => '8.4',
+        'processes' => 2,
+    ]);
+    $operation = $server->operations()->create([
+        'user_id' => $user->id,
+        'type' => 'update_queue_worker',
+        'plan_snapshot' => [
+            'site_id' => $site->id,
+            'queue_worker_id' => $worker->id,
+        ],
+    ]);
+    $operation->steps()->create([
+        'position' => 1,
+        'name' => 'Update queue worker',
+        'recipe' => 'queue_worker.update@v1',
+        'aftermath' => 'finalize_queue_worker',
+        'status' => 'pending',
+        'arguments' => [
+            'queue_worker_id' => $worker->id,
+        ],
+    ]);
+
+    $this->mock(SshService::class)
+        ->shouldReceive('run')
+        ->once()
+        ->andReturn(new SshResult(0, json_encode([
+            'step_key' => 'queue_worker.update',
+            'success' => true,
+            'changed' => true,
+            'data' => ['running' => 2, 'configured' => 2],
+            'error' => ['code' => null, 'message' => null, 'details' => null],
+        ])));
+
+    (new ProcessOperation($operation->id))->handle(
+        app(RecipeRunner::class),
+        app(StepAftermathRegistry::class),
+    );
+
+    expect($worker->fresh()->status)->toBe(QueueWorkerStatus::Installed)
+        ->and($worker->fresh()->installed_at)->not->toBeNull()
+        ->and($operation->fresh()->status)->toBe('succeeded');
+});
+
+test('a failed update operation restores the previous worker attributes', function () {
+    [$user, $server, $site] = queueWorkerSite();
+    $worker = QueueWorker::factory()->for($site)->updating()->create([
+        'name' => 'emails-worker',
+        'connection' => 'database',
+        'queue' => 'new',
+        'php_version' => '8.4',
+        'processes' => 5,
+    ]);
+    $operation = $server->operations()->create([
+        'user_id' => $user->id,
+        'type' => 'update_queue_worker',
+        'plan_snapshot' => [
+            'site_id' => $site->id,
+            'queue_worker_id' => $worker->id,
+            'previous' => [
+                'name' => 'emails-worker',
+                'connection' => 'redis',
+                'queue' => 'emails',
+                'php_version' => '8.4',
+                'processes' => 2,
+                'sleep' => 3,
+                'timeout' => 90,
+                'tries' => 3,
+                'backoff' => 0,
+                'max_jobs' => 0,
+                'max_time' => 0,
+                'stopwaitsecs' => 3600,
+                'restart_on_deploy' => true,
+                'status' => 'installed',
+            ],
+        ],
+    ]);
+    $operation->steps()->create([
+        'position' => 1,
+        'name' => 'Update queue worker',
+        'recipe' => 'queue_worker.update@v1',
+        'aftermath' => 'finalize_queue_worker',
+        'status' => 'pending',
+        'arguments' => [
+            'queue_worker_id' => $worker->id,
+        ],
+    ]);
+
+    $this->mock(SshService::class)
+        ->shouldReceive('run')
+        ->once()
+        ->andReturn(new SshResult(1, json_encode([
+            'step_key' => 'queue_worker.update',
+            'success' => false,
+            'changed' => false,
+            'data' => [],
+            'error' => ['code' => 'worker_verify_failed', 'message' => 'Supervisor rejected the update.', 'details' => null],
+        ])));
+
+    (new ProcessOperation($operation->id))->handle(
+        app(RecipeRunner::class),
+        app(StepAftermathRegistry::class),
+    );
+
+    $worker->refresh();
+
+    expect($worker->status)->toBe(QueueWorkerStatus::Installed)
+        ->and($worker->connection)->toBe('redis')
+        ->and($worker->queue)->toBe('emails')
+        ->and($worker->processes)->toBe(2)
+        ->and($worker->failure_message)->toBe('Supervisor rejected the update.');
+});
+
+test('a failed restart leaves the worker installed with a diagnostic', function () {
+    [$user, $server, $site] = queueWorkerSite();
+    $worker = QueueWorker::factory()->for($site)->restarting()->create();
+    $operation = $server->operations()->create([
+        'user_id' => $user->id,
+        'type' => 'restart_queue_worker',
+        'plan_snapshot' => [
+            'site_id' => $site->id,
+            'queue_worker_id' => $worker->id,
+        ],
+    ]);
+    $operation->steps()->create([
+        'position' => 1,
+        'name' => 'Restart queue worker',
+        'recipe' => 'queue_worker.restart@v1',
+        'aftermath' => 'finalize_queue_worker',
+        'status' => 'pending',
+        'arguments' => [
+            'queue_worker_id' => $worker->id,
+        ],
+    ]);
+
+    $this->mock(SshService::class)
+        ->shouldReceive('run')
+        ->once()
+        ->andReturn(new SshResult(1, json_encode([
+            'step_key' => 'queue_worker.restart',
+            'success' => false,
+            'changed' => false,
+            'data' => [],
+            'error' => ['code' => 'supervisor_restart_failed', 'message' => 'Supervisor could not restart the worker.', 'details' => null],
+        ])));
+
+    (new ProcessOperation($operation->id))->handle(
+        app(RecipeRunner::class),
+        app(StepAftermathRegistry::class),
+    );
+
+    expect($worker->fresh()->status)->toBe(QueueWorkerStatus::Installed)
+        ->and($worker->fresh()->failure_message)->toBe('Supervisor could not restart the worker.');
+});
+
+test('a successful delete operation removes the worker row', function () {
+    [$user, $server, $site] = queueWorkerSite();
+    $worker = QueueWorker::factory()->for($site)->deleting()->create();
+    $operation = $server->operations()->create([
+        'user_id' => $user->id,
+        'type' => 'delete_queue_worker',
+        'plan_snapshot' => [
+            'site_id' => $site->id,
+            'queue_worker_id' => $worker->id,
+        ],
+    ]);
+    $operation->steps()->create([
+        'position' => 1,
+        'name' => 'Remove queue worker',
+        'recipe' => 'queue_worker.delete@v1',
+        'aftermath' => 'finalize_queue_worker',
+        'status' => 'pending',
+        'arguments' => [
+            'queue_worker_id' => $worker->id,
+        ],
+    ]);
+
+    $this->mock(SshService::class)
+        ->shouldReceive('run')
+        ->once()
+        ->andReturn(new SshResult(0, json_encode([
+            'step_key' => 'queue_worker.delete',
+            'success' => true,
+            'changed' => true,
+            'data' => [],
+            'error' => ['code' => null, 'message' => null, 'details' => null],
+        ])));
+
+    (new ProcessOperation($operation->id))->handle(
+        app(RecipeRunner::class),
+        app(StepAftermathRegistry::class),
+    );
+
+    expect(QueueWorker::query()->find($worker->id))->toBeNull()
+        ->and($operation->fresh()->status)->toBe('succeeded');
+});
+
+test('a failed delete operation restores the previous worker status', function () {
+    [$user, $server, $site] = queueWorkerSite();
+    $worker = QueueWorker::factory()->for($site)->deleting()->create();
+    $operation = $server->operations()->create([
+        'user_id' => $user->id,
+        'type' => 'delete_queue_worker',
+        'plan_snapshot' => [
+            'site_id' => $site->id,
+            'queue_worker_id' => $worker->id,
+            'previous' => [
+                ...$worker->snapshotAttributes(),
+                'status' => 'installed',
+            ],
+        ],
+    ]);
+    $operation->steps()->create([
+        'position' => 1,
+        'name' => 'Remove queue worker',
+        'recipe' => 'queue_worker.delete@v1',
+        'aftermath' => 'finalize_queue_worker',
+        'status' => 'pending',
+        'arguments' => [
+            'queue_worker_id' => $worker->id,
+        ],
+    ]);
+
+    $this->mock(SshService::class)
+        ->shouldReceive('run')
+        ->once()
+        ->andReturn(new SshResult(1, json_encode([
+            'step_key' => 'queue_worker.delete',
+            'success' => false,
+            'changed' => false,
+            'data' => [],
+            'error' => ['code' => 'worker_still_present', 'message' => 'Supervisor still reports the worker program after deletion.', 'details' => null],
+        ])));
+
+    (new ProcessOperation($operation->id))->handle(
+        app(RecipeRunner::class),
+        app(StepAftermathRegistry::class),
+    );
+
+    expect($worker->fresh()->status)->toBe(QueueWorkerStatus::Installed)
+        ->and($worker->fresh()->failure_message)->toBe('Supervisor still reports the worker program after deletion.');
+});
+
+test('the owner can read bounded worker logs from the managed path', function () {
+    [$user, $server, $site] = queueWorkerSite();
+    $worker = QueueWorker::factory()->for($site)->installed()->create();
+    $log = "password=hunter2\nprocessed job\n";
+
+    $this->mock(SshService::class)
+        ->shouldReceive('run')
+        ->once()
+        ->withArgs(function ($sshServer, $fingerprint, string $script) use ($worker): bool {
+            expect($script)
+                ->toContain($worker->stdoutLogPath())
+                ->toContain('tail -n')
+                ->not->toContain('/etc/passwd')
+                ->not->toContain('/tmp/evil.log');
+
+            return true;
+        })
+        ->andReturn(new SshResult(0, implode("\n", [
+            'LOG_BYTES:'.strlen($log),
+            'LOG_OUTPUT_B64_BEGIN',
+            base64_encode($log),
+            'LOG_OUTPUT_B64_END',
+        ])));
+
+    $this->actingAs($user)
+        ->getJson(route('sites.queue-workers.logs', [$site, $worker]).'?path=/etc/passwd')
+        ->assertOk()
+        ->assertJsonPath('truncated', false)
+        ->assertJsonPath('output', "password=[REDACTED]\nprocessed job\n");
+});
+
+test('missing worker logs return an empty transcript', function () {
+    [$user, $server, $site] = queueWorkerSite();
+    $worker = QueueWorker::factory()->for($site)->installed()->create();
+
+    $this->mock(SshService::class)
+        ->shouldReceive('run')
+        ->once()
+        ->andReturn(new SshResult(0, "LOG_MISSING\n"));
+
+    $this->actingAs($user)
+        ->getJson(route('sites.queue-workers.logs', [$site, $worker]))
+        ->assertOk()
+        ->assertJson([
+            'output' => '',
+            'truncated' => false,
+        ]);
+});
+
+test('a user cannot read another users queue worker logs', function () {
+    $user = User::factory()->create();
+    $site = Site::factory()->create();
+    $worker = QueueWorker::factory()->for($site)->installed()->create();
+
+    $this->actingAs($user)
+        ->getJson(route('sites.queue-workers.logs', [$site, $worker]))
+        ->assertForbidden();
+});

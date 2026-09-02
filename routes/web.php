@@ -58,6 +58,21 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->name('sites.queue-workers.store');
     Route::get('sites/{site:uuid}/queue-workers/status', [SiteQueueWorkerController::class, 'status'])
         ->name('sites.queue-workers.status');
+    Route::put('sites/{site:uuid}/queue-workers/{queue_worker:uuid}', [SiteQueueWorkerController::class, 'update'])
+        ->name('sites.queue-workers.update')
+        ->scopeBindings();
+    Route::delete('sites/{site:uuid}/queue-workers/{queue_worker:uuid}', [SiteQueueWorkerController::class, 'destroy'])
+        ->name('sites.queue-workers.destroy')
+        ->scopeBindings();
+    Route::post('sites/{site:uuid}/queue-workers/{queue_worker:uuid}/restart', [SiteQueueWorkerController::class, 'restart'])
+        ->name('sites.queue-workers.restart')
+        ->scopeBindings();
+    Route::post('sites/{site:uuid}/queue-workers/{queue_worker:uuid}/graceful-restart', [SiteQueueWorkerController::class, 'gracefulRestart'])
+        ->name('sites.queue-workers.graceful-restart')
+        ->scopeBindings();
+    Route::get('sites/{site:uuid}/queue-workers/{queue_worker:uuid}/logs', [SiteQueueWorkerController::class, 'logs'])
+        ->name('sites.queue-workers.logs')
+        ->scopeBindings();
 
     Route::get('sites', [SitesController::class, 'index'])->name('sites.index');
     Route::get('sites/create', [SitesController::class, 'create'])->name('sites.create');

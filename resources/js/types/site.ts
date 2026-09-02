@@ -115,6 +115,11 @@ export type QueueWorkerStatusResponse = {
     error: string | null;
 };
 
+export type QueueWorkerLogsResponse = {
+    output: string;
+    truncated: boolean;
+};
+
 export type SiteCertificateType = 'letsencrypt' | 'existing' | 'csr';
 
 export type SiteCertificateStatus =
