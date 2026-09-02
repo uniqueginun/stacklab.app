@@ -24,6 +24,7 @@ import {
     deployments as siteDeployments,
     environment as siteEnvironment,
     index as sitesIndex,
+    queues as siteQueues,
     show as siteShow,
     source as siteSource,
     ssl as siteSsl,
@@ -115,6 +116,11 @@ const siteTabs = computed(() => {
     }
 
     if (props.siteIsLaravel && props.siteUuid) {
+        tabs.push({
+            label: 'Queues',
+            href: siteQueues(props.siteUuid),
+            key: 'queues',
+        });
         tabs.push({
             label: 'Commands',
             href: siteCommands(props.siteUuid),

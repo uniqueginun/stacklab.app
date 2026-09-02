@@ -11,6 +11,7 @@ use App\Http\Controllers\SiteDeployController;
 use App\Http\Controllers\SiteEnvironmentController;
 use App\Http\Controllers\SiteExistingCertificateController;
 use App\Http\Controllers\SiteLetsEncryptController;
+use App\Http\Controllers\SiteQueueWorkerController;
 use App\Http\Controllers\SiteRepositoryController;
 use App\Http\Controllers\SiteRollbackController;
 use App\Http\Controllers\SitesController;
@@ -53,6 +54,11 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->name('sites.commands.store')
         ->middleware('throttle:10,1');
 
+    Route::post('sites/{site:uuid}/queue-workers', [SiteQueueWorkerController::class, 'store'])
+        ->name('sites.queue-workers.store');
+    Route::get('sites/{site:uuid}/queue-workers/status', [SiteQueueWorkerController::class, 'status'])
+        ->name('sites.queue-workers.status');
+
     Route::get('sites', [SitesController::class, 'index'])->name('sites.index');
     Route::get('sites/create', [SitesController::class, 'create'])->name('sites.create');
     Route::post('sites', [SitesController::class, 'store'])->name('sites.store');
@@ -61,6 +67,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('sites/{site:uuid}/deployments', [SitesController::class, 'deployments'])->name('sites.deployments');
     Route::get('sites/{site:uuid}/environment', [SitesController::class, 'environment'])->name('sites.environment');
     Route::get('sites/{site:uuid}/commands', [SitesController::class, 'commands'])->name('sites.commands');
+    Route::get('sites/{site:uuid}/queues', [SitesController::class, 'queues'])->name('sites.queues');
     Route::get('sites/{site:uuid}/ssl', [SitesController::class, 'ssl'])->name('sites.ssl');
     Route::post('sites/{site:uuid}/ssl/letsencrypt', [SiteLetsEncryptController::class, 'store'])
         ->name('sites.ssl.letsencrypt');

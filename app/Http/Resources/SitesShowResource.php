@@ -36,6 +36,9 @@ class SitesShowResource extends SitesIndexResource
                 'commit_message' => $release->commit_message,
             ];
         $data['can_manage_ssl'] = $this->statusValue() === SiteStatus::DEPLOYED->value;
+        $data['can_manage_queues'] = $this->resource->isLaravel()
+            && $this->statusValue() === SiteStatus::DEPLOYED->value
+            && $this->current_release_id !== null;
         $data['has_active_ssl'] = $this->resource->hasActiveSsl();
         $data['can_include_www'] = ! str_starts_with(strtolower((string) $this->domain), 'www.');
 

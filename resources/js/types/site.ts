@@ -45,6 +45,7 @@ export type SiteShow = SiteIndex & {
     last_deployed_at: string | null;
     created_at: string | null;
     can_manage_ssl: boolean;
+    can_manage_queues: boolean;
     has_active_ssl: boolean;
     can_include_www: boolean;
     current_release: {
@@ -53,6 +54,65 @@ export type SiteShow = SiteIndex & {
         short_sha: string;
         commit_message: string | null;
     } | null;
+};
+
+export type QueueWorkerStatus =
+    | 'pending'
+    | 'installing'
+    | 'installed'
+    | 'updating'
+    | 'restarting'
+    | 'deleting'
+    | 'failed';
+
+export type QueueWorker = {
+    uuid: string;
+    name: string;
+    connection: string;
+    queue: string;
+    php_version: string;
+    processes: number;
+    sleep: number;
+    timeout: number;
+    tries: number;
+    backoff: number;
+    max_jobs: number;
+    max_time: number;
+    stopwaitsecs: number;
+    restart_on_deploy: boolean;
+    status: QueueWorkerStatus;
+    status_label: string;
+    failure_message: string | null;
+    installed_at: string | null;
+    created_at: string | null;
+};
+
+export type QueueWorkerDefaults = {
+    connection: string;
+    queue: string;
+    processes: number;
+    sleep: number;
+    timeout: number;
+    tries: number;
+    backoff: number;
+    max_jobs: number;
+    max_time: number;
+    stopwaitsecs: number;
+    restart_on_deploy: boolean;
+};
+
+export type QueueWorkerRuntime = {
+    configured_processes: number;
+    running_processes: number;
+    states: Record<string, number>;
+    healthy: boolean;
+    checked_at: string;
+    missing: boolean;
+};
+
+export type QueueWorkerStatusResponse = {
+    workers: Record<string, QueueWorkerRuntime>;
+    error: string | null;
 };
 
 export type SiteCertificateType = 'letsencrypt' | 'existing' | 'csr';

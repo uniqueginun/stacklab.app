@@ -6,6 +6,7 @@ import SiteCommandsPanel from '@/components/stacklab/SiteCommandsPanel.vue';
 import SiteDeploymentsPanel from '@/components/stacklab/SiteDeploymentsPanel.vue';
 import SiteEnvironmentPanel from '@/components/stacklab/SiteEnvironmentPanel.vue';
 import SiteInfoPanel from '@/components/stacklab/SiteInfoPanel.vue';
+import SiteQueuesPanel from '@/components/stacklab/SiteQueuesPanel.vue';
 import SiteSourceControlPanel from '@/components/stacklab/SiteSourceControlPanel.vue';
 import SiteSslPanel from '@/components/stacklab/SiteSslPanel.vue';
 import StatusBadge from '@/components/stacklab/StatusBadge.vue';
@@ -13,6 +14,8 @@ import { show as serverShow } from '@/routes/servers';
 import { index as sitesIndex } from '@/routes/sites';
 import type {
     GitHubAccount,
+    QueueWorker,
+    QueueWorkerDefaults,
     ServerOperation,
     SiteCertificate,
     SiteRelease,
@@ -26,14 +29,31 @@ defineOptions({
     },
 });
 
-const props = defineProps<{
-    site: SiteShow;
-    tab: 'info' | 'source' | 'deployments' | 'environment' | 'commands' | 'ssl';
-    github: GitHubAccount;
-    operation: ServerOperation | null;
-    releases: SiteRelease[];
-    certificate: SiteCertificate | null;
-}>();
+const props = withDefaults(
+    defineProps<{
+        site: SiteShow;
+        tab:
+            | 'info'
+            | 'source'
+            | 'deployments'
+            | 'environment'
+            | 'commands'
+            | 'queues'
+            | 'ssl';
+        github: GitHubAccount;
+        operation: ServerOperation | null;
+        releases: SiteRelease[];
+        certificate: SiteCertificate | null;
+        workers?: QueueWorker[];
+        php_versions?: string[];
+        queue_worker_defaults?: QueueWorkerDefaults | null;
+    }>(),
+    {
+        workers: () => [],
+        php_versions: () => [],
+        queue_worker_defaults: null,
+    },
+);
 
 watchEffect(() => {
     setLayoutProps({
@@ -61,6 +81,10 @@ const pageTitle = computed(() => {
 
     if (props.tab === 'commands') {
         return `Commands · ${props.site.domain}`;
+    }
+
+    if (props.tab === 'queues') {
+        return `Queues · ${props.site.domain}`;
     }
 
     if (props.tab === 'ssl') {
@@ -117,6 +141,14 @@ const pageTitle = computed(() => {
     />
     <SiteEnvironmentPanel v-else-if="tab === 'environment'" :site="site" />
     <SiteCommandsPanel v-else-if="tab === 'commands'" :site="site" />
+    <SiteQueuesPanel
+        v-else-if="tab === 'queues'"
+        :site="site"
+        :workers="workers"
+        :php-versions="php_versions"
+        :defaults="queue_worker_defaults"
+        :operation="operation"
+    />
     <SiteSslPanel
         v-else-if="tab === 'ssl'"
         :site="site"

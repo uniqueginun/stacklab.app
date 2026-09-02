@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Enums\ConnectionStatus;
 use App\Http\Requests\SiteStoreRequest;
 use App\Http\Resources\OperationResource;
+use App\Http\Resources\QueueWorkerResource;
 use App\Http\Resources\ReleaseResource;
 use App\Http\Resources\SiteCertificateResource;
 use App\Http\Resources\SiteCreateServerResource;
@@ -13,6 +14,7 @@ use App\Http\Resources\SitesShowResource;
 use App\Models\Release;
 use App\Models\Server;
 use App\Models\Site;
+use App\Support\QueueWorkers\QueueWorkerSettings;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
@@ -113,6 +115,14 @@ class SitesController extends Controller
         return $this->renderShow($request, $site, 'commands');
     }
 
+    public function queues(Request $request, Site $site): Response
+    {
+        Gate::authorize('view', $site);
+        abort_unless($site->isLaravel(), 404);
+
+        return $this->renderShow($request, $site, 'queues');
+    }
+
     public function ssl(Request $request, Site $site): Response
     {
         Gate::authorize('view', $site);
@@ -139,6 +149,7 @@ class SitesController extends Controller
         $operation = match ($tab) {
             'deployments' => $site->latestDeploymentOperation(),
             'ssl' => $site->latestSslOperation(),
+            'queues' => $site->latestQueueWorkerOperation(),
             default => null,
         };
         $releases = $tab === 'deployments'
@@ -147,6 +158,9 @@ class SitesController extends Controller
             )
             : collect();
         $certificate = $tab === 'ssl' ? $site->displayCertificate() : null;
+        $workers = $tab === 'queues'
+            ? $site->queueWorkers()->latest('id')->get()
+            : collect();
 
         return inertia('sites/Show', [
             'site' => (new SitesShowResource($site))->resolve(),
@@ -162,6 +176,9 @@ class SitesController extends Controller
             'certificate' => $certificate !== null
                 ? (new SiteCertificateResource($certificate))->resolve()
                 : null,
+            'workers' => QueueWorkerResource::collection($workers)->resolve(),
+            'php_versions' => $tab === 'queues' ? QueueWorkerSettings::phpVersionsFor($site) : [],
+            'queue_worker_defaults' => $tab === 'queues' ? QueueWorkerSettings::defaults() : null,
         ]);
     }
 }

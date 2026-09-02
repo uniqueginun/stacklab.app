@@ -65,6 +65,12 @@ class Site extends Model
         return $this->hasMany(SiteCertificate::class);
     }
 
+    /** @return HasMany<QueueWorker, $this> */
+    public function queueWorkers(): HasMany
+    {
+        return $this->hasMany(QueueWorker::class);
+    }
+
     public function activeCertificate(): ?SiteCertificate
     {
         if ($this->relationLoaded('certificates')) {
@@ -104,6 +110,17 @@ class Site extends Model
     {
         return Operation::query()
             ->where('type', 'ssl')
+            ->where('server_id', $this->server_id)
+            ->where('plan_snapshot->site_id', $this->id)
+            ->with(['steps' => fn ($query) => $query->orderBy('position')])
+            ->latest('id')
+            ->first();
+    }
+
+    public function latestQueueWorkerOperation(): ?Operation
+    {
+        return Operation::query()
+            ->where('type', 'install_queue_worker')
             ->where('server_id', $this->server_id)
             ->where('plan_snapshot->site_id', $this->id)
             ->with(['steps' => fn ($query) => $query->orderBy('position')])

@@ -3,6 +3,7 @@
 namespace App\Providers;
 
 use App\Operations\Aftermath\FinalizeDatabaseAftermath;
+use App\Operations\Aftermath\FinalizeQueueWorkerAftermath;
 use App\Operations\Aftermath\FinalizeSiteAftermath;
 use App\Operations\Aftermath\FinalizeSslAftermath;
 use App\Support\StepAftermathRegistry;
@@ -24,6 +25,7 @@ class AppServiceProvider extends ServiceProvider
             FinalizeSiteAftermath::class,
             FinalizeDatabaseAftermath::class,
             FinalizeSslAftermath::class,
+            FinalizeQueueWorkerAftermath::class,
         ], 'operation.step_aftermaths');
 
         $this->app->singleton(StepAftermathRegistry::class, function ($app): StepAftermathRegistry {
