@@ -1,5 +1,6 @@
 STEP_KEY="deploy.clone"
 
+mini_forge_ensure_git
 mini_forge_require_cmd git
 mini_forge_require_cmd ssh
 

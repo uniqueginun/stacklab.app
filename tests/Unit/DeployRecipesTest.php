@@ -48,3 +48,17 @@ test('deploy recipes treat Laravel sites as laravel and refuse an unlinked stora
         ->toContain('mini_forge_is_laravel')
         ->not->toContain('== "laravel"');
 });
+
+test('the clone recipe installs git when it is missing', function () {
+    $lib = file_get_contents(resource_path('recipes/_lib.sh'));
+    $clone = file_get_contents(resource_path('recipes/deploy.clone@v1.sh'));
+    $nginx = file_get_contents(resource_path('recipes/nginx.install@v1.sh'));
+
+    expect($lib)
+        ->toContain('mini_forge_ensure_git')
+        ->toContain('mini_forge_apt_install git')
+        ->and($clone)
+        ->toContain('mini_forge_ensure_git')
+        ->and($nginx)
+        ->toContain('mini_forge_ensure_git');
+});

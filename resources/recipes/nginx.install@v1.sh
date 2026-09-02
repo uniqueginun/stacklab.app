@@ -7,6 +7,8 @@ if ! mini_forge_has_cmd nginx; then
     changed="true"
 fi
 
+mini_forge_ensure_git
+
 mini_forge_ensure_nginx_layout
 sudo -n systemctl enable --now nginx
 mini_forge_require_cmd nginx

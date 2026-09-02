@@ -450,6 +450,16 @@ mini_forge_ensure_composer() {
     sudo -n chmod 755 /usr/local/bin/composer
 }
 
+mini_forge_ensure_git() {
+    if mini_forge_has_cmd git; then
+        return 0
+    fi
+
+    mini_forge_apt_update
+    mini_forge_apt_install git
+    mini_forge_require_cmd git
+}
+
 mini_forge_disable_default_nginx_site() {
     sudo -n rm -f /etc/nginx/sites-enabled/default
     sudo -n rm -f /etc/nginx/conf.d/default.conf
