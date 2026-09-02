@@ -236,7 +236,8 @@ mini_forge_php_packages() {
             "php${short}-php-bcmath" \
             "php${short}-php-sqlite3" \
             "php${short}-php-pecl-zip" \
-            "php${short}-php-pecl-redis6"
+            "php${short}-php-pecl-redis6" \
+            liblzf
         return
     fi
 
@@ -327,22 +328,46 @@ mini_forge_resolve_php_version() {
     return 1
 }
 
+mini_forge_enable_repo() {
+    local repo="$1"
+
+    sudo -n dnf config-manager --set-enabled "$repo" >/dev/null 2>&1 \
+        || sudo -n dnf config-manager --enable "$repo" >/dev/null 2>&1 \
+        || true
+}
+
+mini_forge_enable_epel_repo_files() {
+    local file
+
+    for file in /etc/yum.repos.d/*epel*.repo /etc/yum.repos.d/oracle-epel*.repo; do
+        [[ -f "$file" ]] || continue
+        sudo -n sed -i 's/^enabled=0/enabled=1/' "$file"
+    done
+}
+
 mini_forge_enable_rhel_extras() {
     local major
     major="$(mini_forge_os_major)"
 
     sudo -n dnf install -y dnf-plugins-core >/dev/null 2>&1 || true
-    sudo -n dnf config-manager --set-enabled "ol${major}_codeready_builder" >/dev/null 2>&1 \
-        || sudo -n dnf config-manager --set-enabled crb >/dev/null 2>&1 \
-        || sudo -n dnf config-manager --set-enabled powertools >/dev/null 2>&1 \
-        || true
 
-    if rpm -q "oracle-epel-release-el${major}" >/dev/null 2>&1 || rpm -q epel-release >/dev/null 2>&1; then
-        return 0
+    mini_forge_enable_repo "ol${major}_codeready_builder"
+    mini_forge_enable_repo crb
+    mini_forge_enable_repo powertools
+
+    if ! rpm -q "oracle-epel-release-el${major}" >/dev/null 2>&1 && ! rpm -q epel-release >/dev/null 2>&1; then
+        sudo -n dnf install -y "oracle-epel-release-el${major}" \
+            || sudo -n dnf install -y epel-release \
+            || sudo -n dnf install -y "https://dl.fedoraproject.org/pub/epel/epel-release-latest-${major}.noarch.rpm" \
+            || true
     fi
 
-    sudo -n dnf install -y "oracle-epel-release-el${major}" \
-        || sudo -n dnf install -y epel-release
+    # OL ships oracle-epel-release with the repo disabled. Installing the RPM
+    # is not enough; Remi pecl-redis needs liblzf from EPEL.
+    mini_forge_enable_repo "ol${major}_developer_EPEL"
+    mini_forge_enable_repo epel
+    mini_forge_enable_epel_repo_files
+    sudo -n dnf makecache -y >/dev/null 2>&1 || true
 }
 
 mini_forge_enable_remi() {
@@ -351,11 +376,13 @@ mini_forge_enable_remi() {
 
     mini_forge_enable_rhel_extras
 
-    if rpm -q remi-release >/dev/null 2>&1; then
-        return 0
+    if ! rpm -q remi-release >/dev/null 2>&1; then
+        sudo -n dnf install -y "https://rpms.remirepo.net/enterprise/remi-release-${major}.rpm"
     fi
 
-    sudo -n dnf install -y "https://rpms.remirepo.net/enterprise/remi-release-${major}.rpm"
+    sudo -n dnf install -y liblzf \
+        || sudo -n dnf install -y --enablerepo="ol${major}_developer_EPEL" liblzf \
+        || sudo -n dnf install -y --enablerepo=epel liblzf
 }
 
 mini_forge_enable_php_repo() {

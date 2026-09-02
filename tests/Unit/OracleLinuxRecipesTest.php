@@ -21,6 +21,8 @@ test('the recipe library installs remi php on rhel and sury packages on debian',
     expect($library)
         ->toContain('php${version}-redis')
         ->toContain('php${short}-php-pecl-redis6')
+        ->toContain('ol${major}_developer_EPEL')
+        ->toContain('liblzf')
         ->toContain('mini_forge_enable_remi')
         ->toContain('rpms.remirepo.net')
         ->toContain('mini_forge_pkg_install')
