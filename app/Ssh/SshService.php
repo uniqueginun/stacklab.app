@@ -2,6 +2,7 @@
 
 namespace App\Ssh;
 
+use App\Actions\Servers\GenerateSshKeyPair;
 use App\Models\Server;
 use Illuminate\Process\Exceptions\ProcessFailedException;
 use Illuminate\Support\Facades\File;
@@ -12,43 +13,24 @@ use RuntimeException;
 class SshService
 {
     public function __construct(
-        private KeypairParser $keypairParser,
+        private GenerateSshKeyPair $generateSshKeyPair,
         private HostkeyParser $hostkeyParser,
     ) {}
 
     /**
      * @return array{
-     *     host_key_fingerprint: string,
-     *     known_hosts_path: string,
      *     ssh_public_key: string,
      *     ssh_private_key: string,
      * }
      */
     public function generateKeyPair(Server $server): array
     {
-        $keyName = Str::of($server->name)->slug()->prepend("id_ed25519_{$server->id}_")->toString();
+        $keys = $this->generateSshKeyPair->handle('stacklab-management-'.$server->uuid);
 
-        $scriptPath = resource_path('recipes/ssh');
-
-        $result = Process::path($scriptPath)->timeout(120)->run([
-            'sudo',
-            './setup_ssh_key.sh',
-            'www-data',
-            $server->host,
-            $keyName,
-            (string) $server->ssh_port,
-        ]);
-
-        $attributes = $this->keypairParser->parseKeyOutput(
-            output: $result->output(),
-            error: $result->errorOutput(),
-            exit_code: $result->exitCode() ?? 1,
-            success: $result->successful(),
-        );
-
-        $attributes['ssh_private_key'] = $this->readPrivateKeyMaterial($attributes['ssh_private_key']);
-
-        return $attributes;
+        return [
+            'ssh_public_key' => $keys['public_key'],
+            'ssh_private_key' => $this->readPrivateKeyMaterial($keys['private_key']),
+        ];
     }
 
     public function discoverHost(Server $server): HostFingerprint
