@@ -2,6 +2,9 @@ STEP_KEY="ssl.certbot.install"
 
 changed="false"
 if ! mini_forge_has_cmd certbot; then
+    if [[ "$(mini_forge_os_family)" == "rhel" ]]; then
+        mini_forge_enable_rhel_extras
+    fi
     mini_forge_apt_update
     mini_forge_apt_install certbot
     changed="true"

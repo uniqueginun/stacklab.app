@@ -56,15 +56,113 @@ mini_forge_require_cmd() {
     mini_forge_has_cmd "$1" || mini_forge_fail "${STEP_KEY}" "missing_command" "Required command [$1] is not available."
 }
 
-mini_forge_apt_update() {
+mini_forge_os_id() {
+    # shellcheck disable=SC1091
+    . /etc/os-release
+    printf '%s' "${ID:-unknown}"
+}
+
+mini_forge_os_family() {
+    case "$(mini_forge_os_id)" in
+        ubuntu|debian) printf '%s' debian ;;
+        ol|rhel|centos|almalinux|rocky|fedora) printf '%s' rhel ;;
+        *) printf '%s' unknown ;;
+    esac
+}
+
+mini_forge_os_major() {
+    # shellcheck disable=SC1091
+    . /etc/os-release
+    printf '%s' "${VERSION_ID%%.*}"
+}
+
+mini_forge_php_short() {
+    printf '%s' "${1//./}"
+}
+
+mini_forge_pkg_update() {
+    if [[ "$(mini_forge_os_family)" == "rhel" ]]; then
+        sudo -n dnf makecache -y >/dev/null
+        return
+    fi
+
     sudo -n env DEBIAN_FRONTEND=noninteractive NEEDRESTART_MODE=a NEEDRESTART_SUSPEND=1 APT_LISTCHANGES_FRONTEND=none \
         apt-get -o Dpkg::Use-Pty=0 update -y
 }
 
-mini_forge_apt_install() {
+mini_forge_map_pkg_name() {
+    local name="$1"
+
+    if [[ "$(mini_forge_os_family)" != "rhel" ]]; then
+        printf '%s' "$name"
+        return
+    fi
+
+    case "$name" in
+        redis-server) printf '%s' redis ;;
+        gnupg) printf '%s' gnupg2 ;;
+        *) printf '%s' "$name" ;;
+    esac
+}
+
+mini_forge_pkg_install() {
+    local args=()
+    local mapped=()
+    local arg
+
+    for arg in "$@"; do
+        if [[ "$arg" == --no-install-recommends ]]; then
+            continue
+        fi
+        args+=("$arg")
+    done
+
+    if [[ "$(mini_forge_os_family)" == "rhel" ]]; then
+        for arg in "${args[@]}"; do
+            mapped+=("$(mini_forge_map_pkg_name "$arg")")
+        done
+        sudo -n dnf install -y "${mapped[@]}"
+        return
+    fi
+
     sudo -n env DEBIAN_FRONTEND=noninteractive NEEDRESTART_MODE=a NEEDRESTART_SUSPEND=1 APT_LISTCHANGES_FRONTEND=none \
         apt-get -o Dpkg::Use-Pty=0 -o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confold \
-        install -y "$@"
+        install -y "${args[@]}"
+}
+
+mini_forge_pkg_installed() {
+    local name="$1"
+
+    if [[ "$(mini_forge_os_family)" == "rhel" ]]; then
+        rpm -q "$(mini_forge_map_pkg_name "$name")" >/dev/null 2>&1
+        return
+    fi
+
+    dpkg -s "$name" >/dev/null 2>&1
+}
+
+mini_forge_pkg_available() {
+    local name="$1"
+
+    if [[ "$(mini_forge_os_family)" == "rhel" ]]; then
+        sudo -n dnf list --available "$(mini_forge_map_pkg_name "$name")" >/dev/null 2>&1 \
+            || rpm -q "$(mini_forge_map_pkg_name "$name")" >/dev/null 2>&1
+        return
+    fi
+
+    apt-cache show "$name" >/dev/null 2>&1
+}
+
+mini_forge_apt_update() {
+    mini_forge_pkg_update
+}
+
+mini_forge_apt_install() {
+    mini_forge_pkg_install "$@"
+}
+
+mini_forge_apt_has_package() {
+    mini_forge_pkg_available "$1"
 }
 
 mini_forge_retry() {
@@ -88,9 +186,23 @@ mini_forge_retry() {
 }
 
 mini_forge_php_bin() {
-    if [[ -n "${MF_PHP_VERSION:-}" ]] && mini_forge_has_cmd "php${MF_PHP_VERSION}"; then
-        printf '%s' "php${MF_PHP_VERSION}"
-        return
+    local short candidate
+
+    if [[ -n "${MF_PHP_VERSION:-}" ]]; then
+        if mini_forge_has_cmd "php${MF_PHP_VERSION}"; then
+            printf '%s' "php${MF_PHP_VERSION}"
+            return
+        fi
+
+        short="$(mini_forge_php_short "${MF_PHP_VERSION}")"
+        if mini_forge_has_cmd "php${short}"; then
+            printf '%s' "php${short}"
+            return
+        fi
+        if [[ -x "/opt/remi/php${short}/root/usr/bin/php" ]]; then
+            printf '%s' "/opt/remi/php${short}/root/usr/bin/php"
+            return
+        fi
     fi
 
     if mini_forge_has_cmd php; then
@@ -98,8 +210,7 @@ mini_forge_php_bin() {
         return
     fi
 
-    local candidate
-    for candidate in php8.5 php8.4 php8.3 php8.2 php8.1 php8.0 php7.4; do
+    for candidate in php8.5 php8.4 php8.3 php8.2 php8.1 php8.0 php7.4 php85 php84 php83 php82 php81; do
         if mini_forge_has_cmd "$candidate"; then
             printf '%s' "$candidate"
             return
@@ -109,13 +220,25 @@ mini_forge_php_bin() {
     printf '%s' php
 }
 
-mini_forge_apt_has_package() {
-    apt-cache show "$1" >/dev/null 2>&1 || return 1
-    return 0
-}
-
 mini_forge_php_packages() {
     local version="$1"
+    local short
+
+    if [[ "$(mini_forge_os_family)" == "rhel" ]]; then
+        short="$(mini_forge_php_short "$version")"
+        printf '%s\n' \
+            "php${short}-php-cli" \
+            "php${short}-php-fpm" \
+            "php${short}-php-mbstring" \
+            "php${short}-php-xml" \
+            "php${short}-php-mysqlnd" \
+            "php${short}-php-pdo" \
+            "php${short}-php-bcmath" \
+            "php${short}-php-sqlite3" \
+            "php${short}-php-pecl-zip" \
+            "php${short}-php-pecl-redis6"
+        return
+    fi
 
     printf '%s\n' \
         "php${version}-cli" \
@@ -158,19 +281,34 @@ mini_forge_ensure_php_redis() {
 
     mini_forge_enable_php_repo
     mini_forge_apt_update
-    mini_forge_apt_install "php${version}-redis"
-    sudo -n phpenmod -v "${version}" redis >/dev/null 2>&1 || true
+    if [[ "$(mini_forge_os_family)" == "rhel" ]]; then
+        mini_forge_apt_install "php$(mini_forge_php_short "${version}")-php-pecl-redis6"
+    else
+        mini_forge_apt_install "php${version}-redis"
+        sudo -n phpenmod -v "${version}" redis >/dev/null 2>&1 || true
+    fi
 
     if ! mini_forge_php_has_redis "${php_bin}"; then
         mini_forge_fail "${STEP_KEY}" "php_redis_missing" "PHP ${version} does not have the Redis extension."
     fi
 }
 
+mini_forge_php_cli_package() {
+    local version="$1"
+
+    if [[ "$(mini_forge_os_family)" == "rhel" ]]; then
+        printf 'php%s-php-cli' "$(mini_forge_php_short "$version")"
+        return
+    fi
+
+    printf 'php%s-cli' "$version"
+}
+
 mini_forge_resolve_php_version() {
     local requested="$1"
     local candidate
 
-    if mini_forge_apt_has_package "php${requested}-cli"; then
+    if mini_forge_apt_has_package "$(mini_forge_php_cli_package "$requested")"; then
         printf '%s' "$requested"
         return 0
     fi
@@ -180,7 +318,7 @@ mini_forge_resolve_php_version() {
             continue
         fi
 
-        if mini_forge_apt_has_package "php${candidate}-cli"; then
+        if mini_forge_apt_has_package "$(mini_forge_php_cli_package "$candidate")"; then
             printf '%s' "$candidate"
             return 0
         fi
@@ -189,7 +327,43 @@ mini_forge_resolve_php_version() {
     return 1
 }
 
+mini_forge_enable_rhel_extras() {
+    local major
+    major="$(mini_forge_os_major)"
+
+    sudo -n dnf install -y dnf-plugins-core >/dev/null 2>&1 || true
+    sudo -n dnf config-manager --set-enabled "ol${major}_codeready_builder" >/dev/null 2>&1 \
+        || sudo -n dnf config-manager --set-enabled crb >/dev/null 2>&1 \
+        || sudo -n dnf config-manager --set-enabled powertools >/dev/null 2>&1 \
+        || true
+
+    if rpm -q "oracle-epel-release-el${major}" >/dev/null 2>&1 || rpm -q epel-release >/dev/null 2>&1; then
+        return 0
+    fi
+
+    sudo -n dnf install -y "oracle-epel-release-el${major}" \
+        || sudo -n dnf install -y epel-release
+}
+
+mini_forge_enable_remi() {
+    local major
+    major="$(mini_forge_os_major)"
+
+    mini_forge_enable_rhel_extras
+
+    if rpm -q remi-release >/dev/null 2>&1; then
+        return 0
+    fi
+
+    sudo -n dnf install -y "https://rpms.remirepo.net/enterprise/remi-release-${major}.rpm"
+}
+
 mini_forge_enable_php_repo() {
+    if [[ "$(mini_forge_os_family)" == "rhel" ]]; then
+        mini_forge_enable_remi
+        return
+    fi
+
     if ! mini_forge_has_cmd gpg || ! mini_forge_has_cmd curl; then
         mini_forge_apt_update
         mini_forge_apt_install ca-certificates curl gnupg
@@ -251,6 +425,180 @@ mini_forge_ensure_composer() {
 
 mini_forge_disable_default_nginx_site() {
     sudo -n rm -f /etc/nginx/sites-enabled/default
+    sudo -n rm -f /etc/nginx/conf.d/default.conf
+}
+
+mini_forge_ensure_www_data_user() {
+    if ! getent group www-data >/dev/null 2>&1; then
+        sudo -n groupadd --system www-data
+    fi
+
+    if ! getent passwd www-data >/dev/null 2>&1; then
+        sudo -n useradd --system --no-create-home --gid www-data --home-dir /var/www --shell /usr/sbin/nologin www-data
+    fi
+}
+
+mini_forge_selinux_allow_web() {
+    mini_forge_has_cmd getenforce || return 0
+    [[ "$(getenforce 2>/dev/null || true)" == "Disabled" ]] && return 0
+
+    sudo -n dnf install -y policycoreutils-python-utils >/dev/null 2>&1 || true
+    sudo -n setsebool -P httpd_enable_homedirs on || true
+    sudo -n setsebool -P httpd_read_user_content on || true
+    sudo -n setsebool -P httpd_can_network_connect on || true
+    sudo -n setsebool -P httpd_can_network_connect_db on || true
+
+    sudo -n mkdir -p /run/php
+    if mini_forge_has_cmd semanage; then
+        sudo -n semanage fcontext -a -t httpd_var_run_t '/run/php(/.*)?' >/dev/null 2>&1 \
+            || sudo -n semanage fcontext -m -t httpd_var_run_t '/run/php(/.*)?' >/dev/null 2>&1 \
+            || true
+        sudo -n restorecon -R /run/php >/dev/null 2>&1 || true
+    fi
+}
+
+mini_forge_open_http_firewall() {
+    sudo -n systemctl is-active --quiet firewalld || return 0
+
+    sudo -n firewall-cmd --permanent --add-service=http >/dev/null 2>&1 || true
+    sudo -n firewall-cmd --permanent --add-service=https >/dev/null 2>&1 || true
+    sudo -n firewall-cmd --reload >/dev/null 2>&1 || true
+}
+
+mini_forge_ensure_nginx_layout() {
+    sudo -n mkdir -p /etc/nginx/sites-available /etc/nginx/sites-enabled
+    mini_forge_disable_default_nginx_site
+
+    [[ "$(mini_forge_os_family)" == "rhel" ]] || return 0
+
+    mini_forge_ensure_www_data_user
+
+    if [[ -f /etc/nginx/nginx.conf ]]; then
+        sudo -n sed -i 's/^user[[:space:]].*/user www-data;/' /etc/nginx/nginx.conf
+    fi
+
+    if [[ ! -f /etc/nginx/conf.d/zz-sites-enabled.conf ]]; then
+        printf 'include /etc/nginx/sites-enabled/*;\n' | sudo -n tee /etc/nginx/conf.d/zz-sites-enabled.conf >/dev/null
+    fi
+
+    if [[ ! -e /etc/nginx/sites-enabled/000-placeholder ]]; then
+        printf '# Placeholder so the sites-enabled glob is never empty.\n' \
+            | sudo -n tee /etc/nginx/sites-available/000-placeholder >/dev/null
+        sudo -n ln -sfn /etc/nginx/sites-available/000-placeholder /etc/nginx/sites-enabled/000-placeholder
+    fi
+
+    mini_forge_selinux_allow_web
+    mini_forge_open_http_firewall
+}
+
+mini_forge_link_php_cli() {
+    local version="$1"
+    local short src
+    short="$(mini_forge_php_short "$version")"
+
+    if [[ -x "/usr/bin/php${short}" ]]; then
+        src="/usr/bin/php${short}"
+    elif [[ -x "/opt/remi/php${short}/root/usr/bin/php" ]]; then
+        src="/opt/remi/php${short}/root/usr/bin/php"
+    else
+        return 0
+    fi
+
+    sudo -n ln -sfn "$src" "/usr/local/bin/php${version}"
+    sudo -n ln -sfn "$src" /usr/local/bin/php
+}
+
+mini_forge_php_fpm_unit() {
+    local version="$1"
+
+    if [[ "$(mini_forge_os_family)" == "rhel" ]]; then
+        printf 'php%s-php-fpm' "$(mini_forge_php_short "$version")"
+        return
+    fi
+
+    printf 'php%s-fpm' "$version"
+}
+
+mini_forge_php_fpm_pool_conf() {
+    local version="$1"
+    local short
+    short="$(mini_forge_php_short "$version")"
+
+    if [[ -f "/etc/opt/remi/php${short}/php-fpm.d/www.conf" ]]; then
+        printf '%s' "/etc/opt/remi/php${short}/php-fpm.d/www.conf"
+        return
+    fi
+
+    if [[ -f /etc/php-fpm.d/www.conf ]]; then
+        printf '%s' /etc/php-fpm.d/www.conf
+        return
+    fi
+
+    printf '%s' "/etc/php/${version}/fpm/pool.d/www.conf"
+}
+
+mini_forge_configure_php_fpm() {
+    local version="$1"
+    local socket="/run/php/php${version}-fpm.sock"
+    local conf
+
+    [[ "$(mini_forge_os_family)" == "rhel" ]] || return 0
+
+    mini_forge_ensure_www_data_user
+    sudo -n mkdir -p /run/php
+    sudo -n chown www-data:www-data /run/php || true
+
+    conf="$(mini_forge_php_fpm_pool_conf "$version")"
+    [[ -f "$conf" ]] || return 0
+
+    sudo -n sed -i \
+        -e 's/^user = .*/user = www-data/' \
+        -e 's/^group = .*/group = www-data/' \
+        -e "s|^listen = .*|listen = ${socket}|" \
+        -e 's/^;*listen.owner = .*/listen.owner = www-data/' \
+        -e 's/^;*listen.group = .*/listen.group = www-data/' \
+        "$conf"
+}
+
+mini_forge_reload_php_fpm() {
+    local version="${1:-${MF_PHP_VERSION:-}}"
+    local unit
+
+    [[ -n "$version" ]] || return 0
+
+    unit="$(mini_forge_php_fpm_unit "$version")"
+    sudo -n systemctl reload "$unit" 2>/dev/null \
+        || sudo -n systemctl restart "$unit" 2>/dev/null \
+        || sudo -n systemctl reload "php${version}-fpm" 2>/dev/null \
+        || sudo -n systemctl reload php-fpm 2>/dev/null \
+        || true
+}
+
+mini_forge_ensure_supervisor_layout() {
+    local conf=""
+
+    sudo -n mkdir -p /etc/supervisor/conf.d
+
+    [[ "$(mini_forge_os_family)" == "rhel" ]] || return 0
+
+    if [[ -f /etc/supervisord.conf ]]; then
+        conf=/etc/supervisord.conf
+    elif [[ -f /etc/supervisor/supervisord.conf ]]; then
+        conf=/etc/supervisor/supervisord.conf
+    else
+        return 0
+    fi
+
+    if grep -q '/etc/supervisor/conf.d' "$conf"; then
+        return 0
+    fi
+
+    if grep -qE '^files[[:space:]]*=' "$conf"; then
+        sudo -n sed -i 's|^files[[:space:]]*=.*|files = supervisord.d/*.ini /etc/supervisor/conf.d/*.conf|' "$conf"
+        return 0
+    fi
+
+    printf '\n[include]\nfiles = /etc/supervisor/conf.d/*.conf\n' | sudo -n tee -a "$conf" >/dev/null
 }
 
 # Restart nginx after writing a vhost. Reload can succeed while the Ubuntu
@@ -393,7 +741,7 @@ mini_forge_write_nginx_vhost() {
     local enabled="/etc/nginx/sites-enabled/${domain}"
     local backup=""
 
-    mini_forge_disable_default_nginx_site
+    mini_forge_ensure_nginx_layout
 
     if [[ -f "${available}" ]]; then
         backup="$(mktemp)"

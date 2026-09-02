@@ -103,7 +103,7 @@ test('the activate recipe restarts nginx and opens the release to www-data', fun
     expect($activate)
         ->toContain('mini_forge_ensure_www_data_readable')
         ->toContain('mini_forge_reload_nginx')
-        ->toContain('mini_forge_disable_default_nginx_site')
+        ->toContain('mini_forge_ensure_nginx_layout')
         ->and($lib)
         ->toContain('umask 022')
         ->toContain('systemctl restart nginx')
@@ -114,6 +114,6 @@ test('the activate recipe restarts nginx and opens the release to www-data', fun
         ->toContain('mini_forge_write_nginx_vhost')
         ->toContain('mini_forge_set_app_url_scheme')
         ->and($nginx)
-        ->toContain('mini_forge_disable_default_nginx_site')
+        ->toContain('mini_forge_ensure_nginx_layout')
         ->toContain('mini_forge_reload_nginx');
 });

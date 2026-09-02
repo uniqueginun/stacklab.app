@@ -14,7 +14,7 @@ mini_forge_php_stack_missing() {
     local package
 
     while IFS= read -r package; do
-        if ! dpkg -s "$package" >/dev/null 2>&1; then
+        if ! mini_forge_pkg_installed "$package"; then
             return 0
         fi
     done < <(mini_forge_php_packages "$version")
@@ -42,9 +42,12 @@ if mini_forge_php_stack_missing "$MF_PHP_VERSION"; then
     fi
 fi
 
+mini_forge_link_php_cli "$MF_PHP_VERSION"
+mini_forge_configure_php_fpm "$MF_PHP_VERSION"
+
 php_bin="php${MF_PHP_VERSION}"
 if ! mini_forge_has_cmd "$php_bin"; then
-    php_bin="php"
+    php_bin="$(mini_forge_php_bin)"
 fi
 
 mini_forge_require_cmd "$php_bin"
@@ -54,8 +57,11 @@ if [[ "$php_version" != "$MF_PHP_VERSION" ]]; then
     mini_forge_fail "$STEP_KEY" "php_version_mismatch" "Expected PHP ${MF_PHP_VERSION} but found ${php_version}."
 fi
 
-sudo -n systemctl enable --now "php${php_version}-fpm" >/dev/null 2>&1 \
+sudo -n systemctl enable --now "$(mini_forge_php_fpm_unit "$php_version")" >/dev/null 2>&1 \
+    || sudo -n systemctl enable --now "php${php_version}-fpm" >/dev/null 2>&1 \
     || sudo -n systemctl enable --now php-fpm >/dev/null 2>&1 \
     || true
+
+mini_forge_reload_php_fpm "$php_version"
 
 mini_forge_emit "$STEP_KEY" "true" "$changed" "{\"php_version\":\"${php_version}\"}"

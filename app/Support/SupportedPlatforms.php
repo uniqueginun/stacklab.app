@@ -9,7 +9,7 @@ final class SupportedPlatforms
     public const DEFAULT_PHP = '8.4';
 
     /**
-     * PHP versions installable via distro packages or Ondřej/Sury.
+     * PHP versions installable via distro packages, Ondřej/Sury, or Remi.
      *
      * @var array<string, array<string, list<string>>>
      */
@@ -23,6 +23,18 @@ final class SupportedPlatforms
             '12' => ['8.1', '8.2', '8.3', '8.4'],
             '13' => ['8.2', '8.3', '8.4'],
         ],
+        'ol' => [
+            '9' => ['8.1', '8.2', '8.3', '8.4'],
+        ],
+    ];
+
+    /**
+     * @var array<string, string>
+     */
+    private const OS_LABELS = [
+        'ubuntu' => 'Ubuntu',
+        'debian' => 'Debian',
+        'ol' => 'Oracle Linux',
     ];
 
     /** @return list<string> */
@@ -71,7 +83,10 @@ final class SupportedPlatforms
             return [];
         }
 
-        return self::PHP[strtolower($os)][self::normalizeVersion($version)] ?? [];
+        $os = strtolower($os);
+        $normalized = self::normalizeVersion($version, $os);
+
+        return self::PHP[$os][$normalized] ?? [];
     }
 
     /**
@@ -125,15 +140,25 @@ final class SupportedPlatforms
 
         $os = $server->osId();
         $version = $server->osVersion();
+
+        if ($os === null || $version === null) {
+            return null;
+        }
+
         $phpVersions = self::phpVersions($os, $version);
 
-        if ($os === null || $version === null || $phpVersions === []) {
-            return null;
+        if ($phpVersions === []) {
+            return sprintf(
+                'PHP provisioning is not available on %s %s. Supported: %s.',
+                self::osDisplayName($os),
+                $version,
+                self::supportedLabel(),
+            );
         }
 
         return sprintf(
             'Available on %s %s: %s.',
-            ucfirst($os),
+            self::osDisplayName($os),
             $version,
             implode(', ', $phpVersions),
         );
@@ -144,18 +169,34 @@ final class SupportedPlatforms
         $labels = [];
 
         foreach (self::PHP as $os => $releases) {
-            $labels[] = ucfirst($os).' '.implode(', ', array_keys($releases));
+            $labels[] = self::osDisplayName($os).' '.implode(', ', array_keys($releases));
         }
 
         return implode(' or ', $labels);
     }
 
-    public static function normalizeVersion(string $version): string
+    public static function osDisplayName(string $os): string
     {
+        return self::OS_LABELS[strtolower($os)] ?? ucfirst($os);
+    }
+
+    public static function normalizeVersion(string $version, ?string $os = null): string
+    {
+        if ($os !== null && self::usesMajorVersionCatalog(strtolower($os))) {
+            if (preg_match('/^(\d+)/', $version, $matches) === 1) {
+                return $matches[1];
+            }
+        }
+
         if (preg_match('/^(\d+)\.0$/', $version, $matches) === 1) {
             return $matches[1];
         }
 
         return $version;
+    }
+
+    private static function usesMajorVersionCatalog(string $os): bool
+    {
+        return $os === 'ol';
     }
 }

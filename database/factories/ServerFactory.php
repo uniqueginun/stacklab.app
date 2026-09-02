@@ -53,6 +53,18 @@ class ServerFactory extends Factory
     /**
      * @param  array<string, mixed>|null  $serverInfo
      */
+    public function oracleLinux(?array $serverInfo = null): static
+    {
+        return $this->connected($serverInfo ?? [
+            'os' => 'ol',
+            'os_version' => '9.8',
+            'os_pretty' => 'Oracle Linux Server 9.8',
+        ]);
+    }
+
+    /**
+     * @param  array<string, mixed>|null  $serverInfo
+     */
     public function provisioned(string $profile = 'php', ?array $serverInfo = null): static
     {
         return $this->connected($serverInfo)->state(fn (): array => [

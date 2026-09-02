@@ -49,10 +49,65 @@ configure_local_root() {
 changed="false"
 
 if command -v mysqld >/dev/null 2>&1 || command -v mysql >/dev/null 2>&1 || [[ -x /usr/sbin/mysqld ]] || [[ -x /usr/bin/mysqld ]]; then
-    sudo -n systemctl enable --now mysql >/dev/null 2>&1 || sudo -n systemctl enable --now mariadb >/dev/null 2>&1 || true
+    sudo -n systemctl enable --now mysql >/dev/null 2>&1 || sudo -n systemctl enable --now mysqld >/dev/null 2>&1 || sudo -n systemctl enable --now mariadb >/dev/null 2>&1 || true
     configure_local_root
     installed_version="$(detect_mysql_version)"
     mini_forge_emit "$STEP_KEY" "true" "false" "{\"mysql_version\":\"${installed_version}\"}"
+    exit 0
+fi
+
+install_mysql_el() {
+    local el release_rpm
+    el="$(mini_forge_os_major)"
+
+    sudo -n dnf module disable -y mysql >/dev/null 2>&1 || true
+
+    if [[ "${MF_MYSQL_VERSION}" == "8.4" ]]; then
+        release_rpm="https://dev.mysql.com/get/mysql84-community-release-el${el}-1.noarch.rpm"
+    else
+        release_rpm="https://dev.mysql.com/get/mysql80-community-release-el${el}-1.noarch.rpm"
+    fi
+
+    sudo -n dnf install -y "$release_rpm" \
+        || sudo -n dnf install -y "https://repo.mysql.com/mysql$(printf '%s' "${MF_MYSQL_VERSION}" | tr -d .)-community-release-el${el}.rpm"
+
+    if [[ "${MF_MYSQL_VERSION}" == "8.0" ]]; then
+        sudo -n dnf config-manager --disable mysql-8.4-lts-community >/dev/null 2>&1 || true
+        sudo -n dnf config-manager --enable mysql80-community >/dev/null 2>&1 || true
+    fi
+
+    mini_forge_apt_install mysql-community-server mysql-community-client
+}
+
+configure_local_root_el() {
+    local tmp_pass
+
+    if sudo -n mysql -e "SELECT 1" >/dev/null 2>&1; then
+        configure_local_root
+        return
+    fi
+
+    tmp_pass="$(sudo -n grep 'temporary password' /var/log/mysqld.log 2>/dev/null | tail -n1 | awk '{print $NF}' || true)"
+    [[ -n "${tmp_pass}" ]] || return 0
+
+    mysql --connect-expired-password -uroot -p"${tmp_pass}" -e "INSTALL PLUGIN auth_socket SONAME 'auth_socket.so'; ALTER USER 'root'@'localhost' IDENTIFIED WITH auth_socket; FLUSH PRIVILEGES;" >/dev/null 2>&1 \
+        || mysql --connect-expired-password -uroot -p"${tmp_pass}" -e "ALTER USER 'root'@'localhost' IDENTIFIED WITH auth_socket; FLUSH PRIVILEGES;" >/dev/null 2>&1 \
+        || true
+}
+
+if [[ "$(mini_forge_os_family)" == "rhel" ]]; then
+    install_mysql_el
+    changed="true"
+    sudo -n systemctl enable --now mysqld >/dev/null 2>&1 || sudo -n systemctl enable --now mysql >/dev/null 2>&1 || true
+    configure_local_root_el
+
+    installed_version="$(detect_mysql_version)"
+
+    if [[ "$installed_version" != "$MF_MYSQL_VERSION" ]]; then
+        mini_forge_fail "$STEP_KEY" "mysql_version_mismatch" "Expected MySQL ${MF_MYSQL_VERSION} but found ${installed_version}."
+    fi
+
+    mini_forge_emit "$STEP_KEY" "true" "$changed" "{\"mysql_version\":\"${installed_version}\"}"
     exit 0
 fi
 

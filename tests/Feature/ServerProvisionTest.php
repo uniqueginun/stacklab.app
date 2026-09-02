@@ -30,6 +30,24 @@ test('the server page exposes provisioning options for a connected server', func
         );
 });
 
+test('the server page exposes php versions for oracle linux 9.8', function () {
+    $user = User::factory()->create();
+    $server = Server::factory()->for($user)->oracleLinux()->create();
+
+    $this->actingAs($user)
+        ->get(route('servers.show', $server))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('servers/Show')
+            ->where('server.uuid', $server->uuid)
+            ->where('server.php_versions', ['8.1', '8.2', '8.3', '8.4'])
+            ->where('server.default_php_version', '8.4')
+            ->where('server.php_hint', 'Available on Oracle Linux 9.8: 8.1, 8.2, 8.3, 8.4.')
+            ->where('server.mysql_versions', ['8.4', '8.0'])
+            ->where('server.can_provision', true)
+        );
+});
+
 test('a connected user can start static provisioning', function () {
     Queue::fake();
 
@@ -99,6 +117,30 @@ test('a connected user can start php provisioning with versions', function () {
         ->and($mysqlStep->arguments['mysql_version'])->toBe('8.0');
 
     expect(Site::query()->count())->toBe(0);
+
+    Queue::assertPushed(ProcessOperation::class);
+});
+
+test('oracle linux 9.8 can start php provisioning', function () {
+    Queue::fake();
+
+    $user = User::factory()->create();
+    $server = Server::factory()->for($user)->oracleLinux()->create();
+
+    $this->actingAs($user)
+        ->post(route('servers.provision', $server), [
+            'profile' => 'php',
+            'php_version' => '8.4',
+            'mysql_version' => '8.4',
+        ])
+        ->assertRedirect(route('servers.show', $server));
+
+    $operation = Operation::query()->first();
+
+    expect($operation)->not->toBeNull()
+        ->and($operation->plan_snapshot['profile'])->toBe('php')
+        ->and($operation->plan_snapshot['php_version'])->toBe('8.4')
+        ->and($operation->plan_snapshot['mysql_version'])->toBe('8.4');
 
     Queue::assertPushed(ProcessOperation::class);
 });

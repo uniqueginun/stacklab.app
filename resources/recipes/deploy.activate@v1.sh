@@ -19,7 +19,7 @@ ln -sfn "releases/${MF_COMMIT_SHA}" "${ROOT}/current"
 
 mini_forge_ensure_www_data_readable "${ROOT}" "${RELEASE}" "${MF_SSH_USER:-}"
 
-mini_forge_disable_default_nginx_site
+mini_forge_ensure_nginx_layout
 
 if [[ -f "${AVAILABLE}" ]]; then
     BACKUP="$(mktemp)"
@@ -46,9 +46,7 @@ mini_forge_reload_nginx
 rm -f "${BACKUP}"
 
 if [[ -n "${MF_PHP_VERSION:-}" ]]; then
-    sudo -n systemctl reload "php${MF_PHP_VERSION}-fpm" 2>/dev/null \
-        || sudo -n systemctl reload php-fpm 2>/dev/null \
-        || true
+    mini_forge_reload_php_fpm "${MF_PHP_VERSION}"
 fi
 
 if [[ "${RUN_QUEUE_RESTART}" == "1" ]] && mini_forge_is_laravel && [[ -f "${RELEASE}/artisan" ]]; then
