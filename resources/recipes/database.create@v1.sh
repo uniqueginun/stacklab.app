@@ -12,15 +12,10 @@ fi
 
 mini_forge_ensure_mysql_socket_auth || true
 
-# Prefer sudo mysql (unix_socket). Never require a root password for administration.
+# Prefer sudo mysql --no-defaults (unix_socket). EL also uses /etc/mini-forge/mysql.cnf
+# because Community RPMs ship an expired temporary root password.
 mysql_cmd() {
-    if sudo -n mysql -e "SELECT 1" >/dev/null 2>&1; then
-        sudo -n mysql "$@"
-        return
-    fi
-
-    if [[ -f /etc/mini-forge/mysql.cnf ]] && mysql --defaults-extra-file=/etc/mini-forge/mysql.cnf -e "SELECT 1" >/dev/null 2>&1; then
-        mysql --defaults-extra-file=/etc/mini-forge/mysql.cnf "$@"
+    if mini_forge_mysql_exec "$@"; then
         return
     fi
 

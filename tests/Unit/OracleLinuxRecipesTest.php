@@ -35,7 +35,10 @@ test('the recipe library installs remi php on rhel and sury packages on debian',
         ->toContain('/etc/supervisor/conf.d/*.conf')
         ->toContain('mini_forge_ensure_mysql_socket_auth')
         ->toContain('skip-grant-tables')
-        ->toContain('connect-expired-password');
+        ->toContain('connect-expired-password')
+        ->toContain('/etc/mini-forge/mysql.cnf')
+        ->toContain('--no-defaults')
+        ->toContain('zz-stacklab-skip-grant.conf');
 });
 
 test('php and nginx install recipes dispatch through os-family helpers', function () {
@@ -65,5 +68,6 @@ test('php and nginx install recipes dispatch through os-family helpers', functio
         ->toContain('mini_forge_reload_php_fpm')
         ->toContain('mini_forge_ensure_nginx_layout')
         ->and($database)
-        ->toContain('mini_forge_ensure_mysql_socket_auth');
+        ->toContain('mini_forge_ensure_mysql_socket_auth')
+        ->toContain('mini_forge_mysql_exec');
 });
