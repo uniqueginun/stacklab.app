@@ -1099,23 +1099,39 @@ mini_forge_configure_php_fpm() {
         -e 's/^;*listen.owner = .*/listen.owner = www-data/' \
         -e 's/^;*listen.group = .*/listen.group = www-data/' \
         -e 's/^;*listen.mode = .*/listen.mode = 0660/' \
-        -e 's/^listen.acl_users = .*/;listen.acl_users =/' \
-        -e 's/^listen.acl_groups = .*/;listen.acl_groups =/' \
+        -e 's/^[[:space:]]*listen\.acl_users[[:space:]]*=.*/;listen.acl_users =/' \
+        -e 's/^[[:space:]]*listen\.acl_groups[[:space:]]*=.*/;listen.acl_groups =/' \
         "$conf"
 }
 
 mini_forge_reload_php_fpm() {
     local version="${1:-${MF_PHP_VERSION:-}}"
-    local unit
+    local unit socket
+    local -a units
 
     [[ -n "$version" ]] || return 0
 
     unit="$(mini_forge_php_fpm_unit "$version")"
-    sudo -n systemctl reload "$unit" 2>/dev/null \
-        || sudo -n systemctl restart "$unit" 2>/dev/null \
-        || sudo -n systemctl reload "php${version}-fpm" 2>/dev/null \
-        || sudo -n systemctl reload php-fpm 2>/dev/null \
-        || true
+    units=("$unit" "php${version}-fpm" php-fpm)
+
+    if [[ "$(mini_forge_os_family)" == "rhel" ]]; then
+        socket="/run/php/php${version}-fpm.sock"
+        # Reload inherits the existing socket fd, so Remi ACLs (apache,nginx)
+        # stay in effect and nginx/www-data keeps getting 502 permission denied.
+        sudo -n rm -f "$socket"
+        for unit in "${units[@]}"; do
+            if sudo -n systemctl restart "$unit" 2>/dev/null; then
+                return 0
+            fi
+        done
+        return 0
+    fi
+
+    for unit in "${units[@]}"; do
+        if sudo -n systemctl reload "$unit" 2>/dev/null || sudo -n systemctl restart "$unit" 2>/dev/null; then
+            return 0
+        fi
+    done
 }
 
 mini_forge_ensure_supervisor_layout() {

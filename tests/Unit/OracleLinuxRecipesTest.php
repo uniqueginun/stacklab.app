@@ -32,6 +32,8 @@ test('the recipe library installs remi php on rhel and sury packages on debian',
         ->toContain('user = www-data')
         ->toContain('listen.mode = 0660')
         ->toContain(';listen.acl_users =')
+        ->toContain('listen\\.acl_users')
+        ->toContain('rm -f "$socket"')
         ->toContain('/etc/tmpfiles.d/stacklab-php.conf')
         ->toContain('stacklab-socket.conf')
         ->toContain('include /etc/nginx/sites-enabled/*')
