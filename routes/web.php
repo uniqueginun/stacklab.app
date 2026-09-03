@@ -18,6 +18,7 @@ use App\Http\Controllers\SitesController;
 use App\Http\Controllers\SiteSignedCertificateController;
 use App\Http\Controllers\VersionControlProviderController;
 use Illuminate\Support\Facades\Route;
+use MinsentSdk\MiniSentry\Facades\MiniSentry;
 
 Route::inertia('/', 'Welcome')->name('home');
 
