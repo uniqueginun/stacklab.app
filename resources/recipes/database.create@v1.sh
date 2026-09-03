@@ -12,8 +12,8 @@ fi
 
 mini_forge_ensure_mysql_socket_auth || true
 
-# Prefer sudo mysql --no-defaults (unix_socket). EL also uses /etc/mini-forge/mysql.cnf
-# because Community RPMs ship an expired temporary root password.
+# Prefer sudo mysql --no-defaults (unix_socket). EL Community RPMs ship an
+# expired temporary root password, so admin access uses /etc/mini-forge/mysql.cnf.
 mysql_cmd() {
     if mini_forge_mysql_exec "$@"; then
         return

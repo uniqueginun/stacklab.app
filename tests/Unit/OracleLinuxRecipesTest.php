@@ -39,7 +39,13 @@ test('the recipe library installs remi php on rhel and sury packages on debian',
         ->toContain('/etc/mini-forge/mysql.cnf')
         ->toContain('--no-defaults')
         ->toContain('--socket=')
-        ->toContain('--datadir=');
+        ->toContain('--datadir=')
+        ->toContain('caching_sha2_password')
+        ->toContain('killall')
+        ->toContain('--init-file')
+        ->toContain('stacklab-init-file.conf')
+        ->toContain('systemctl mask')
+        ->toContain('cnf:missing');
 });
 
 test('php and nginx install recipes dispatch through os-family helpers', function () {
