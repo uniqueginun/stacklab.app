@@ -38,7 +38,8 @@ test('the recipe library installs remi php on rhel and sury packages on debian',
         ->toContain('connect-expired-password')
         ->toContain('/etc/mini-forge/mysql.cnf')
         ->toContain('--no-defaults')
-        ->toContain('zz-stacklab-skip-grant.conf');
+        ->toContain('--socket=')
+        ->toContain('--datadir=');
 });
 
 test('php and nginx install recipes dispatch through os-family helpers', function () {

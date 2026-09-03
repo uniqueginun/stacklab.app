@@ -469,6 +469,37 @@ mini_forge_mysql_bin() {
     command -v mysql
 }
 
+mini_forge_mysql_socket() {
+    local sock line
+
+    for sock in /var/lib/mysql/mysql.sock /run/mysqld/mysqld.sock /tmp/mysql.sock; do
+        if sudo -n test -S "${sock}"; then
+            printf '%s' "${sock}"
+            return
+        fi
+    done
+
+    line="$(sudo -n awk -F= '/^[[:space:]]*socket[[:space:]]*=/ {gsub(/[[:space:]]/, "", $2); print $2; exit}' /etc/my.cnf /etc/my.cnf.d/*.cnf /etc/mysql/my.cnf 2>/dev/null || true)"
+    if [[ -n "${line}" ]]; then
+        printf '%s' "${line}"
+        return
+    fi
+
+    printf '%s' /var/lib/mysql/mysql.sock
+}
+
+mini_forge_mysql_datadir() {
+    local dir
+
+    dir="$(sudo -n awk -F= '/^[[:space:]]*datadir[[:space:]]*=/ {gsub(/[[:space:]]/, "", $2); print $2; exit}' /etc/my.cnf /etc/my.cnf.d/*.cnf /etc/mysql/my.cnf 2>/dev/null || true)"
+    if [[ -n "${dir}" ]]; then
+        printf '%s' "${dir}"
+        return
+    fi
+
+    printf '%s' /var/lib/mysql
+}
+
 mini_forge_mysqld_bin() {
     if [[ -x /usr/sbin/mysqld ]]; then
         printf '%s' /usr/sbin/mysqld
@@ -497,25 +528,34 @@ mini_forge_mysql_unit() {
 }
 
 mini_forge_mysql_admin_ok() {
-    local mysql
+    local mysql socket
     mysql="$(mini_forge_mysql_bin)"
+    socket="$(mini_forge_mysql_socket)"
 
-    sudo -n "${mysql}" --no-defaults -uroot --protocol=socket -e "SELECT 1" >/dev/null 2>&1 \
-        || sudo -n "${mysql}" --defaults-extra-file=/etc/mini-forge/mysql.cnf -e "SELECT 1" >/dev/null 2>&1
+    sudo -n "${mysql}" --no-defaults -uroot --socket="${socket}" -e "SELECT 1" >/dev/null 2>&1 \
+        || sudo -n "${mysql}" -uroot --socket="${socket}" -e "SELECT 1" >/dev/null 2>&1 \
+        || sudo -n "${mysql}" -e "SELECT 1" >/dev/null 2>&1 \
+        || sudo -n "${mysql}" --defaults-extra-file=/etc/mini-forge/mysql.cnf --socket="${socket}" -e "SELECT 1" >/dev/null 2>&1
 }
 
 mini_forge_mysql_exec() {
-    local mysql
+    local mysql socket
     mysql="$(mini_forge_mysql_bin)"
+    socket="$(mini_forge_mysql_socket)"
 
-    if sudo -n "${mysql}" --no-defaults -uroot --protocol=socket -e "SELECT 1" >/dev/null 2>&1; then
-        sudo -n "${mysql}" --no-defaults -uroot --protocol=socket "$@"
+    if sudo -n "${mysql}" --no-defaults -uroot --socket="${socket}" -e "SELECT 1" >/dev/null 2>&1; then
+        sudo -n "${mysql}" --no-defaults -uroot --socket="${socket}" "$@"
+        return
+    fi
+
+    if sudo -n "${mysql}" -e "SELECT 1" >/dev/null 2>&1; then
+        sudo -n "${mysql}" "$@"
         return
     fi
 
     if sudo -n test -f /etc/mini-forge/mysql.cnf \
-        && sudo -n "${mysql}" --defaults-extra-file=/etc/mini-forge/mysql.cnf -e "SELECT 1" >/dev/null 2>&1; then
-        sudo -n "${mysql}" --defaults-extra-file=/etc/mini-forge/mysql.cnf "$@"
+        && sudo -n "${mysql}" --defaults-extra-file=/etc/mini-forge/mysql.cnf --socket="${socket}" -e "SELECT 1" >/dev/null 2>&1; then
+        sudo -n "${mysql}" --defaults-extra-file=/etc/mini-forge/mysql.cnf --socket="${socket}" "$@"
         return
     fi
 
@@ -543,7 +583,7 @@ mini_forge_mysql_wait() {
             return 0
         fi
 
-        output="$(sudo -n mysqladmin --no-defaults --protocol=socket ping 2>&1 || true)"
+        output="$(sudo -n mysqladmin --no-defaults --socket="$(mini_forge_mysql_socket)" ping 2>&1 || true)"
         if [[ "${output}" == *"mysqld is alive"* ]] || [[ "${output,,}" == *"access denied"* ]]; then
             return 0
         fi
@@ -555,20 +595,22 @@ mini_forge_mysql_wait() {
 }
 
 mini_forge_mysql_random_password() {
-    openssl rand -base64 18 2>/dev/null | tr -d '/+=' || tr -dc 'A-Za-z0-9' </dev/urandom | head -c 24
+    python3 -c 'import secrets; print(secrets.token_urlsafe(18))'
 }
 
 mini_forge_mysql_write_client_cnf() {
     local dest="$1"
     local password="$2"
+    local socket="${3:-$(mini_forge_mysql_socket)}"
 
-    DEST="${dest}" PASSWORD="${password}" python3 - <<'PY'
+    DEST="${dest}" PASSWORD="${password}" SOCKET="${socket}" python3 - <<'PY'
 import os
 from pathlib import Path
 
 password = os.environ["PASSWORD"].replace("\\", "\\\\").replace('"', '\\"')
+socket = os.environ["SOCKET"].replace("\\", "\\\\").replace('"', '\\"')
 Path(os.environ["DEST"]).write_text(
-    f'[client]\nuser=root\npassword="{password}"\nprotocol=socket\n',
+    f'[client]\nuser=root\npassword="{password}"\nsocket="{socket}"\nprotocol=socket\n',
     encoding="utf-8",
 )
 os.chmod(os.environ["DEST"], 0o600)
@@ -613,84 +655,95 @@ mini_forge_mysql_apply_socket_plugin() {
 }
 
 mini_forge_mysql_try_temp_password() {
-    local tmp_pass known cnf mysql
+    local tmp_pass known cnf mysql socket
     mysql="$(mini_forge_mysql_bin)"
+    socket="$(mini_forge_mysql_socket)"
 
     tmp_pass="$(mini_forge_mysql_temp_password)" || return 1
     known="$(mini_forge_mysql_random_password)"
     cnf="$(mktemp)"
 
-    mini_forge_mysql_write_client_cnf "${cnf}" "${tmp_pass}"
+    mini_forge_mysql_write_client_cnf "${cnf}" "${tmp_pass}" "${socket}"
 
-    # Expired RPM root can only change its password. Use sudo so the client
-    # can reach /var/lib/mysql/mysql.sock (750 mysql:mysql on EL).
-    if ! sudo -n "${mysql}" --defaults-extra-file="${cnf}" --connect-expired-password -e "ALTER USER 'root'@'localhost' IDENTIFIED BY '${known}';" >/dev/null 2>&1; then
+    # Expired RPM root can only change its password.
+    if ! sudo -n "${mysql}" --defaults-extra-file="${cnf}" --connect-expired-password --socket="${socket}" -e "ALTER USER 'root'@'localhost' IDENTIFIED BY '${known}';" >/dev/null 2>&1; then
         rm -f "${cnf}"
         return 1
     fi
 
     mini_forge_mysql_persist_admin_cnf "${known}"
     rm -f "${cnf}"
-    mini_forge_mysql_apply_socket_plugin sudo -n "${mysql}" --defaults-extra-file=/etc/mini-forge/mysql.cnf
 }
 
-mini_forge_mysql_skip_grant_files() {
-    local unit
-    unit="$(mini_forge_mysql_unit)"
+mini_forge_mysql_shutdown_standalone() {
+    local mysql socket pidfile
+    mysql="$(mini_forge_mysql_bin)"
+    socket="$(mini_forge_mysql_socket)"
+    pidfile="/tmp/stacklab-mysql-reset.pid"
 
-    printf '%s\n' \
-        "/etc/systemd/system/${unit}.service.d/zz-stacklab-skip-grant.conf" \
-        /etc/my.cnf.d/zz-stacklab-socket-reset.cnf \
-        /etc/mysql/mysql.conf.d/zz-stacklab-socket-reset.cnf \
-        /etc/mysql/conf.d/zz-stacklab-socket-reset.cnf
-}
-
-mini_forge_mysql_clear_skip_grant() {
-    local unit file
-    unit="$(mini_forge_mysql_unit)"
-
-    while IFS= read -r file; do
-        sudo -n rm -f "${file}"
-    done < <(mini_forge_mysql_skip_grant_files)
-
-    sudo -n rmdir "/etc/systemd/system/${unit}.service.d" >/dev/null 2>&1 || true
-    sudo -n systemctl daemon-reload >/dev/null 2>&1 || true
+    sudo -n "${mysql}" --no-defaults -uroot --socket="${socket}" -e "SHUTDOWN;" >/dev/null 2>&1 || true
+    if sudo -n test -f "${pidfile}"; then
+        sudo -n kill "$(sudo -n cat "${pidfile}")" >/dev/null 2>&1 || true
+        sudo -n rm -f "${pidfile}"
+    fi
 }
 
 mini_forge_mysql_skip_grant_reset() {
-    local unit mysqld mysql known defaults dropin
+    local mysqld mysql socket datadir known pidfile logfile i
 
-    unit="$(mini_forge_mysql_unit)"
     mysqld="$(mini_forge_mysqld_bin)"
     mysql="$(mini_forge_mysql_bin)"
+    socket="$(mini_forge_mysql_socket)"
+    datadir="$(mini_forge_mysql_datadir)"
     known="$(mini_forge_mysql_random_password)"
-    dropin="/etc/systemd/system/${unit}.service.d/zz-stacklab-skip-grant.conf"
-    defaults=""
+    pidfile="/tmp/stacklab-mysql-reset.pid"
+    logfile="/tmp/stacklab-mysql-reset.log"
 
-    if sudo -n test -f /etc/my.cnf; then
-        defaults="--defaults-file=/etc/my.cnf"
+    # systemd Type=notify units ignore a cnf-only skip-grant drop-in and a
+    # replaced ExecStart often fails to become ready. Start mysqld ourselves.
+    trap - ERR
+    set +e
+    mini_forge_mysql_stop
+    sudo -n rm -f "${pidfile}" "${logfile}"
+    sudo -n -u mysql "${mysqld}" \
+        --datadir="${datadir}" \
+        --socket="${socket}" \
+        --pid-file="${pidfile}" \
+        --skip-grant-tables \
+        --skip-networking \
+        --user=mysql \
+        >"${logfile}" 2>&1 &
+
+    for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30; do
+        if sudo -n "${mysql}" --no-defaults -uroot --socket="${socket}" -e "SELECT 1" >/dev/null 2>&1; then
+            break
+        fi
+        sleep 1
+    done
+
+    if sudo -n "${mysql}" --no-defaults -uroot --socket="${socket}" -e "FLUSH PRIVILEGES; ALTER USER 'root'@'localhost' IDENTIFIED BY '${known}';" >/dev/null 2>&1 \
+        || sudo -n "${mysql}" --no-defaults -uroot --socket="${socket}" -e "FLUSH PRIVILEGES; UPDATE mysql.user SET plugin='caching_sha2_password', authentication_string='' WHERE User='root' AND Host='localhost'; FLUSH PRIVILEGES; ALTER USER 'root'@'localhost' IDENTIFIED BY '${known}';" >/dev/null 2>&1; then
+        mini_forge_mysql_persist_admin_cnf "${known}"
+        printf '%s\n' "stacklab-mysql: wrote /etc/mini-forge/mysql.cnf after skip-grant reset" >&2
+    else
+        printf '%s\n' "stacklab-mysql: skip-grant ALTER USER failed using socket ${socket}" >&2
+        sudo -n tail -n 20 "${logfile}" >&2 || true
     fi
 
-    mini_forge_mysql_stop
-    sudo -n mkdir -p "/etc/systemd/system/${unit}.service.d" /etc/my.cnf.d
-    printf '[mysqld]\nskip-grant-tables\nskip-networking\n' | sudo -n tee /etc/my.cnf.d/zz-stacklab-socket-reset.cnf >/dev/null
-    printf '[Service]\nExecStart=\nExecStart=%s %s --skip-grant-tables --skip-networking\n' "${mysqld}" "${defaults}" \
-        | sudo -n tee "${dropin}" >/dev/null
-    sudo -n systemctl daemon-reload
-    sudo -n systemctl start "${unit}" >/dev/null 2>&1 || mini_forge_mysql_start
-    mini_forge_mysql_wait || true
-
-    sudo -n "${mysql}" --no-defaults -uroot --protocol=socket -e "FLUSH PRIVILEGES;" >/dev/null 2>&1 || true
-    sudo -n "${mysql}" --no-defaults -uroot --protocol=socket -e "ALTER USER 'root'@'localhost' IDENTIFIED BY '${known}';" >/dev/null 2>&1 \
-        || sudo -n "${mysql}" --no-defaults -uroot --protocol=socket -e "UPDATE mysql.user SET plugin='caching_sha2_password', authentication_string='' WHERE User='root' AND Host='localhost'; FLUSH PRIVILEGES; ALTER USER 'root'@'localhost' IDENTIFIED BY '${known}';" >/dev/null 2>&1 \
-        || true
-    mini_forge_mysql_persist_admin_cnf "${known}"
-    mini_forge_mysql_apply_socket_plugin sudo -n "${mysql}" --no-defaults -uroot --protocol=socket
-
-    mini_forge_mysql_clear_skip_grant
-    mini_forge_mysql_stop
+    mini_forge_mysql_shutdown_standalone
+    sleep 1
     mini_forge_mysql_start
+    set -e
+    trap mini_forge_on_error ERR
     mini_forge_mysql_wait || true
+}
+
+mini_forge_mysql_diag() {
+    local mysql socket
+    mysql="$(mini_forge_mysql_bin)"
+    socket="$(mini_forge_mysql_socket)"
+
+    printf '%s' "$(sudo -n "${mysql}" --no-defaults -uroot --socket="${socket}" -e "SELECT 1" 2>&1 | tail -n 2 | tr '\n' ' ')"
 }
 
 mini_forge_ensure_mysql_socket_auth() {

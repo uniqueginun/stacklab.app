@@ -19,7 +19,7 @@ mysql_cmd() {
         return
     fi
 
-    mini_forge_fail "$STEP_KEY" "mysql_unavailable" "MySQL/MariaDB admin access failed. Local root should use unix_socket so sudo mysql works."
+    mini_forge_fail "$STEP_KEY" "mysql_unavailable" "MySQL/MariaDB admin access failed. Local root should use unix_socket so sudo mysql works. $(mini_forge_mysql_diag)"
 }
 
 NAME_B64="$(printf '%s' "${MF_DB_NAME}" | base64 -w0 2>/dev/null || printf '%s' "${MF_DB_NAME}" | base64 | tr -d '\n')"
