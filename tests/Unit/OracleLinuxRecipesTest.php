@@ -32,7 +32,10 @@ test('the recipe library installs remi php on rhel and sury packages on debian',
         ->toContain('user = www-data')
         ->toContain('include /etc/nginx/sites-enabled/*')
         ->toContain('httpd_enable_homedirs')
-        ->toContain('/etc/supervisor/conf.d/*.conf');
+        ->toContain('/etc/supervisor/conf.d/*.conf')
+        ->toContain('mini_forge_ensure_mysql_socket_auth')
+        ->toContain('skip-grant-tables')
+        ->toContain('connect-expired-password');
 });
 
 test('php and nginx install recipes dispatch through os-family helpers', function () {
@@ -41,6 +44,7 @@ test('php and nginx install recipes dispatch through os-family helpers', functio
     $mysql = file_get_contents(resource_path('recipes/mysql.install@v1.sh'));
     $node = file_get_contents(resource_path('recipes/node.install@v1.sh'));
     $activate = file_get_contents(resource_path('recipes/deploy.activate@v1.sh'));
+    $database = file_get_contents(resource_path('recipes/database.create@v1.sh'));
 
     expect($php)
         ->toContain('mini_forge_pkg_installed')
@@ -53,10 +57,13 @@ test('php and nginx install recipes dispatch through os-family helpers', functio
         ->toContain('install_mysql_el')
         ->toContain('mysqld')
         ->toContain('mysql84-community-release-el')
+        ->toContain('mini_forge_ensure_mysql_socket_auth')
         ->and($node)
         ->toContain('nodejs:22')
         ->toContain('mini_forge_pkg_installed')
         ->and($activate)
         ->toContain('mini_forge_reload_php_fpm')
-        ->toContain('mini_forge_ensure_nginx_layout');
+        ->toContain('mini_forge_ensure_nginx_layout')
+        ->and($database)
+        ->toContain('mini_forge_ensure_mysql_socket_auth');
 });

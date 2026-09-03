@@ -32,29 +32,22 @@ detect_mysql_version() {
     printf '%s' "${MF_MYSQL_VERSION}"
 }
 
-configure_local_root() {
-    if sudo -n mysql -e "SELECT 1" >/dev/null 2>&1; then
-        sudo -n mysql -e "INSTALL PLUGIN auth_socket SONAME 'auth_socket.so';" >/dev/null 2>&1 || true
-        sudo -n mysql -e "ALTER USER 'root'@'localhost' IDENTIFIED WITH auth_socket; FLUSH PRIVILEGES;" >/dev/null 2>&1 \
-            || sudo -n mysql -e "ALTER USER 'root'@'localhost' IDENTIFIED VIA unix_socket; FLUSH PRIVILEGES;" >/dev/null 2>&1 \
-            || true
-        return
+finish_mysql_install() {
+    local changed="$1"
+    local check_version="${2:-true}"
+
+    if ! mini_forge_ensure_mysql_socket_auth; then
+        mini_forge_fail "$STEP_KEY" "mysql_socket_auth_failed" "Unable to configure local MySQL root for sudo mysql (unix_socket)."
     fi
 
-    if mysql -e "SELECT 1" >/dev/null 2>&1; then
-        mysql -e "ALTER USER 'root'@'localhost' IDENTIFIED VIA unix_socket; FLUSH PRIVILEGES;" >/dev/null 2>&1 || true
-    fi
-}
-
-changed="false"
-
-if command -v mysqld >/dev/null 2>&1 || command -v mysql >/dev/null 2>&1 || [[ -x /usr/sbin/mysqld ]] || [[ -x /usr/bin/mysqld ]]; then
-    sudo -n systemctl enable --now mysql >/dev/null 2>&1 || sudo -n systemctl enable --now mysqld >/dev/null 2>&1 || sudo -n systemctl enable --now mariadb >/dev/null 2>&1 || true
-    configure_local_root
     installed_version="$(detect_mysql_version)"
-    mini_forge_emit "$STEP_KEY" "true" "false" "{\"mysql_version\":\"${installed_version}\"}"
-    exit 0
-fi
+
+    if [[ "${check_version}" == "true" && "$installed_version" != "$MF_MYSQL_VERSION" ]]; then
+        mini_forge_fail "$STEP_KEY" "mysql_version_mismatch" "Expected MySQL ${MF_MYSQL_VERSION} but found ${installed_version}."
+    fi
+
+    mini_forge_emit "$STEP_KEY" "true" "$changed" "{\"mysql_version\":\"${installed_version}\"}"
+}
 
 install_mysql_el() {
     local el release_rpm
@@ -79,35 +72,16 @@ install_mysql_el() {
     mini_forge_apt_install mysql-community-server mysql-community-client
 }
 
-configure_local_root_el() {
-    local tmp_pass
+changed="false"
 
-    if sudo -n mysql -e "SELECT 1" >/dev/null 2>&1; then
-        configure_local_root
-        return
-    fi
-
-    tmp_pass="$(sudo -n grep 'temporary password' /var/log/mysqld.log 2>/dev/null | tail -n1 | awk '{print $NF}' || true)"
-    [[ -n "${tmp_pass}" ]] || return 0
-
-    mysql --connect-expired-password -uroot -p"${tmp_pass}" -e "INSTALL PLUGIN auth_socket SONAME 'auth_socket.so'; ALTER USER 'root'@'localhost' IDENTIFIED WITH auth_socket; FLUSH PRIVILEGES;" >/dev/null 2>&1 \
-        || mysql --connect-expired-password -uroot -p"${tmp_pass}" -e "ALTER USER 'root'@'localhost' IDENTIFIED WITH auth_socket; FLUSH PRIVILEGES;" >/dev/null 2>&1 \
-        || true
-}
+if command -v mysqld >/dev/null 2>&1 || command -v mysql >/dev/null 2>&1 || [[ -x /usr/sbin/mysqld ]] || [[ -x /usr/bin/mysqld ]]; then
+    finish_mysql_install "false" "false"
+    exit 0
+fi
 
 if [[ "$(mini_forge_os_family)" == "rhel" ]]; then
     install_mysql_el
-    changed="true"
-    sudo -n systemctl enable --now mysqld >/dev/null 2>&1 || sudo -n systemctl enable --now mysql >/dev/null 2>&1 || true
-    configure_local_root_el
-
-    installed_version="$(detect_mysql_version)"
-
-    if [[ "$installed_version" != "$MF_MYSQL_VERSION" ]]; then
-        mini_forge_fail "$STEP_KEY" "mysql_version_mismatch" "Expected MySQL ${MF_MYSQL_VERSION} but found ${installed_version}."
-    fi
-
-    mini_forge_emit "$STEP_KEY" "true" "$changed" "{\"mysql_version\":\"${installed_version}\"}"
+    finish_mysql_install "true"
     exit 0
 fi
 
@@ -117,6 +91,7 @@ if ! mini_forge_has_cmd gpg || ! mini_forge_has_cmd curl; then
     changed="true"
 fi
 
+# shellcheck disable=SC1091
 . /etc/os-release
 os_id="${ID:-debian}"
 codename="${VERSION_CODENAME:-bookworm}"
@@ -150,13 +125,4 @@ mini_forge_apt_update
 mini_forge_apt_install mysql-community-server mysql-community-client
 changed="true"
 
-sudo -n systemctl enable --now mysql >/dev/null 2>&1 || sudo -n systemctl enable --now mysqld >/dev/null 2>&1 || true
-configure_local_root
-
-installed_version="$(detect_mysql_version)"
-
-if [[ "$installed_version" != "$MF_MYSQL_VERSION" ]]; then
-    mini_forge_fail "$STEP_KEY" "mysql_version_mismatch" "Expected MySQL ${MF_MYSQL_VERSION} but found ${installed_version}."
-fi
-
-mini_forge_emit "$STEP_KEY" "true" "$changed" "{\"mysql_version\":\"${installed_version}\"}"
+finish_mysql_install "$changed"

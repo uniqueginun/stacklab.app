@@ -10,6 +10,8 @@ if [[ "${MF_DB_USERNAME}" == "root" || "${MF_DB_USERNAME}" == "mysql" || "${MF_D
     mini_forge_fail "$STEP_KEY" "reserved_username" "Refusing to manage reserved MySQL username [${MF_DB_USERNAME}]."
 fi
 
+mini_forge_ensure_mysql_socket_auth || true
+
 # Prefer sudo mysql (unix_socket). Never require a root password for administration.
 mysql_cmd() {
     if sudo -n mysql -e "SELECT 1" >/dev/null 2>&1; then

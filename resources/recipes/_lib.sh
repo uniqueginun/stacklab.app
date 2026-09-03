@@ -460,6 +460,167 @@ mini_forge_ensure_git() {
     mini_forge_require_cmd git
 }
 
+mini_forge_mysql_admin_ok() {
+    sudo -n mysql --protocol=socket -e "SELECT 1" >/dev/null 2>&1
+}
+
+mini_forge_mysql_start() {
+    sudo -n systemctl enable --now mysqld >/dev/null 2>&1 \
+        || sudo -n systemctl enable --now mysql >/dev/null 2>&1 \
+        || sudo -n systemctl enable --now mariadb >/dev/null 2>&1 \
+        || true
+}
+
+mini_forge_mysql_stop() {
+    sudo -n systemctl stop mysqld >/dev/null 2>&1 || true
+    sudo -n systemctl stop mysql >/dev/null 2>&1 || true
+    sudo -n systemctl stop mariadb >/dev/null 2>&1 || true
+}
+
+mini_forge_mysql_wait() {
+    local i output
+
+    for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30; do
+        if mini_forge_mysql_admin_ok; then
+            return 0
+        fi
+
+        output="$(mysqladmin --protocol=socket ping 2>&1 || true)"
+        if [[ "${output}" == *"mysqld is alive"* ]] || [[ "${output,,}" == *"access denied"* ]]; then
+            return 0
+        fi
+
+        sleep 1
+    done
+
+    return 1
+}
+
+mini_forge_mysql_write_client_cnf() {
+    local dest="$1"
+    local password="$2"
+
+    DEST="${dest}" PASSWORD="${password}" python3 - <<'PY'
+import os
+from pathlib import Path
+
+password = os.environ["PASSWORD"].replace("\\", "\\\\").replace('"', '\\"')
+Path(os.environ["DEST"]).write_text(
+    f'[client]\nuser=root\npassword="{password}"\nprotocol=socket\n',
+    encoding="utf-8",
+)
+os.chmod(os.environ["DEST"], 0o600)
+PY
+}
+
+mini_forge_mysql_temp_password() {
+    local line=""
+
+    if [[ -f /var/log/mysqld.log ]]; then
+        line="$(sudo -n grep 'temporary password' /var/log/mysqld.log 2>/dev/null | tail -n1 || true)"
+    fi
+
+    if [[ -z "${line}" ]] && mini_forge_has_cmd journalctl; then
+        line="$(sudo -n journalctl -u mysqld -u mysql --no-pager -n 400 2>/dev/null | grep 'temporary password' | tail -n1 || true)"
+    fi
+
+    [[ -n "${line}" ]] || return 1
+    printf '%s' "${line##*localhost: }"
+}
+
+mini_forge_mysql_apply_socket_plugin() {
+    local -a mysql=( "$@" )
+
+    "${mysql[@]}" -e "INSTALL PLUGIN auth_socket SONAME 'auth_socket.so';" >/dev/null 2>&1 || true
+    "${mysql[@]}" -e "ALTER USER 'root'@'localhost' IDENTIFIED WITH auth_socket; FLUSH PRIVILEGES;" >/dev/null 2>&1 \
+        || "${mysql[@]}" -e "ALTER USER 'root'@'localhost' IDENTIFIED VIA unix_socket; FLUSH PRIVILEGES;" >/dev/null 2>&1 \
+        || "${mysql[@]}" -e "UPDATE mysql.user SET plugin='auth_socket', authentication_string='' WHERE User='root' AND Host='localhost'; FLUSH PRIVILEGES;" >/dev/null 2>&1
+}
+
+mini_forge_mysql_try_temp_password() {
+    local tmp_pass known cnf
+
+    tmp_pass="$(mini_forge_mysql_temp_password)" || return 1
+    known="$(openssl rand -base64 18 2>/dev/null | tr -d '/+=' || tr -dc 'A-Za-z0-9' </dev/urandom | head -c 24)"
+    cnf="$(mktemp)"
+
+    mini_forge_mysql_write_client_cnf "${cnf}" "${tmp_pass}"
+
+    # Expired RPM root can only change its password — plugin install must wait.
+    if ! mysql --defaults-extra-file="${cnf}" --connect-expired-password -e "ALTER USER 'root'@'localhost' IDENTIFIED BY '${known}';" >/dev/null 2>&1; then
+        rm -f "${cnf}"
+        return 1
+    fi
+
+    mini_forge_mysql_write_client_cnf "${cnf}" "${known}"
+    mini_forge_mysql_apply_socket_plugin mysql --defaults-extra-file="${cnf}"
+    rm -f "${cnf}"
+}
+
+mini_forge_mysql_reset_dropin() {
+    if [[ -d /etc/my.cnf.d ]]; then
+        printf '%s' /etc/my.cnf.d/zz-stacklab-socket-reset.cnf
+        return
+    fi
+
+    if [[ -d /etc/mysql/mysql.conf.d ]]; then
+        printf '%s' /etc/mysql/mysql.conf.d/zz-stacklab-socket-reset.cnf
+        return
+    fi
+
+    if [[ -d /etc/mysql/conf.d ]]; then
+        printf '%s' /etc/mysql/conf.d/zz-stacklab-socket-reset.cnf
+        return
+    fi
+
+    sudo -n mkdir -p /etc/my.cnf.d
+    printf '%s' /etc/my.cnf.d/zz-stacklab-socket-reset.cnf
+}
+
+mini_forge_mysql_skip_grant_reset() {
+    local dropin
+    dropin="$(mini_forge_mysql_reset_dropin)"
+
+    mini_forge_mysql_stop
+    printf '[mysqld]\nskip-grant-tables\nskip-networking\n' | sudo -n tee "${dropin}" >/dev/null
+    sudo -n systemctl start mysqld >/dev/null 2>&1 \
+        || sudo -n systemctl start mysql >/dev/null 2>&1 \
+        || sudo -n systemctl start mariadb >/dev/null 2>&1 \
+        || true
+    mini_forge_mysql_wait || true
+
+    sudo -n mysql --protocol=socket -e "INSTALL PLUGIN auth_socket SONAME 'auth_socket.so';" >/dev/null 2>&1 || true
+    sudo -n mysql --protocol=socket -e "FLUSH PRIVILEGES;" >/dev/null 2>&1 || true
+    sudo -n mysql --protocol=socket -e "ALTER USER 'root'@'localhost' IDENTIFIED WITH auth_socket; FLUSH PRIVILEGES;" >/dev/null 2>&1 \
+        || sudo -n mysql --protocol=socket -e "ALTER USER 'root'@'localhost' IDENTIFIED VIA unix_socket; FLUSH PRIVILEGES;" >/dev/null 2>&1 \
+        || sudo -n mysql --protocol=socket -e "UPDATE mysql.user SET plugin='auth_socket', authentication_string='' WHERE User='root' AND Host='localhost'; FLUSH PRIVILEGES;" >/dev/null 2>&1 \
+        || true
+
+    sudo -n rm -f "${dropin}"
+    mini_forge_mysql_stop
+    mini_forge_mysql_start
+    mini_forge_mysql_wait || true
+}
+
+mini_forge_ensure_mysql_socket_auth() {
+    mini_forge_mysql_start
+    mini_forge_mysql_wait || true
+
+    if mini_forge_mysql_admin_ok; then
+        mini_forge_mysql_apply_socket_plugin sudo -n mysql --protocol=socket || true
+        mini_forge_mysql_admin_ok
+        return
+    fi
+
+    mini_forge_mysql_try_temp_password || true
+    if mini_forge_mysql_admin_ok; then
+        return 0
+    fi
+
+    mini_forge_mysql_skip_grant_reset
+    mini_forge_mysql_admin_ok
+}
+
 mini_forge_disable_default_nginx_site() {
     sudo -n rm -f /etc/nginx/sites-enabled/default
     sudo -n rm -f /etc/nginx/conf.d/default.conf
