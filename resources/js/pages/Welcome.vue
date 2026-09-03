@@ -72,6 +72,8 @@ const GithubMark = (props: { class?: string }) =>
         ],
     );
 
+const sourceUrl = 'https://github.com/uniqueginun/stacklab.app';
+
 const navLinks = [
     { href: '#features', label: 'Features' },
     { href: '#workflow', label: 'Workflow' },
@@ -475,6 +477,14 @@ onUnmounted(() => {
                 </div>
 
                 <div class="hidden items-center gap-5 md:flex">
+                    <a
+                        :href="sourceUrl"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        class="text-sm text-zinc-400 transition-colors hover:text-white"
+                    >
+                        Source
+                    </a>
                     <Link
                         v-if="!user"
                         :href="login()"
@@ -517,6 +527,15 @@ onUnmounted(() => {
                         @click="closeMobileMenu"
                     >
                         {{ link.label }}
+                    </a>
+                    <a
+                        :href="sourceUrl"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        class="rounded-lg px-3 py-2.5 text-zinc-300 hover:bg-white/[0.04] hover:text-white"
+                        @click="closeMobileMenu"
+                    >
+                        Source
                     </a>
                     <Link
                         v-if="!user"
@@ -1186,13 +1205,24 @@ onUnmounted(() => {
                             </p>
                         </div>
                     </div>
-                    <a
-                        href="#workflow"
-                        class="inline-flex items-center justify-center gap-2 rounded-lg border border-white/10 px-4 py-2.5 text-sm font-medium text-zinc-300 transition hover:border-white/20 hover:bg-white/[0.04] hover:text-white"
-                    >
-                        Read the workflow
-                        <ArrowRight class="h-4 w-4" aria-hidden="true" />
-                    </a>
+                    <div class="flex flex-col gap-3 sm:flex-row">
+                        <a
+                            :href="sourceUrl"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            class="inline-flex items-center justify-center gap-2 rounded-lg bg-stack-orange px-4 py-2.5 text-sm font-semibold text-[#17100a] shadow-orange transition hover:bg-stack-orange-soft"
+                        >
+                            <GithubMark class="h-4 w-4" />
+                            View the source
+                        </a>
+                        <a
+                            href="#workflow"
+                            class="inline-flex items-center justify-center gap-2 rounded-lg border border-white/10 px-4 py-2.5 text-sm font-medium text-zinc-300 transition hover:border-white/20 hover:bg-white/[0.04] hover:text-white"
+                        >
+                            Read the workflow
+                            <ArrowRight class="h-4 w-4" aria-hidden="true" />
+                        </a>
+                    </div>
                 </div>
             </section>
 
@@ -1244,11 +1274,13 @@ onUnmounted(() => {
                                 />
                             </Link>
                             <a
-                                href="#github"
+                                :href="sourceUrl"
+                                target="_blank"
+                                rel="noopener noreferrer"
                                 class="inline-flex items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[0.025] px-5 py-3 text-sm font-medium text-zinc-300 transition hover:border-white/20 hover:bg-white/[0.05] hover:text-white"
                             >
                                 <GithubMark class="h-4 w-4" />
-                                View GitHub flow
+                                View the source
                             </a>
                         </div>
                     </div>
@@ -1277,6 +1309,14 @@ onUnmounted(() => {
                         class="transition hover:text-zinc-300"
                     >
                         {{ link.label }}
+                    </a>
+                    <a
+                        :href="sourceUrl"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        class="transition hover:text-zinc-300"
+                    >
+                        Source
                     </a>
                 </div>
             </div>
