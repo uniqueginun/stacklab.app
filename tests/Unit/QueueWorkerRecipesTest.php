@@ -45,6 +45,25 @@ test('the graceful restart recipe signals laravel from the current release', fun
         ->not->toContain('supervisorctl');
 });
 
+test('queue worker recipes link remi php onto the canonical /usr/bin/phpX.Y path', function () {
+    $library = file_get_contents(resource_path('recipes/_lib.sh'));
+    $install = file_get_contents(resource_path('recipes/queue_worker.install@v1.sh'));
+    $update = file_get_contents(resource_path('recipes/queue_worker.update@v1.sh'));
+    $restart = file_get_contents(resource_path('recipes/queue_worker.graceful_restart@v1.sh'));
+
+    expect($library)
+        ->toContain('mini_forge_require_php_binary')
+        ->toContain('mini_forge_php_cli_src')
+        ->toContain('/opt/remi/php${short}/root/usr/bin/php')
+        ->toContain('ln -sfn "$src" "/usr/bin/php${version}"')
+        ->and($install)
+        ->toContain('mini_forge_require_php_binary "${MF_PHP_BINARY}"')
+        ->and($update)
+        ->toContain('mini_forge_require_php_binary "${MF_PHP_BINARY}"')
+        ->and($restart)
+        ->toContain('mini_forge_require_php_binary "${MF_PHP_BINARY}"');
+});
+
 test('php provision includes the redis extension and can install it on demand', function () {
     $library = file_get_contents(resource_path('recipes/_lib.sh'));
     $install = file_get_contents(resource_path('recipes/queue_worker.install@v1.sh'));

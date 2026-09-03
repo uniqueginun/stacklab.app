@@ -4,13 +4,7 @@ STEP_KEY="queue_worker.graceful_restart"
 : "${MF_PHP_BINARY:?}"
 : "${MF_ARTISAN_PATH:?}"
 
-if [[ ! "${MF_PHP_BINARY}" =~ ^/usr/bin/php[0-9]+\.[0-9]+$ ]]; then
-    mini_forge_fail "$STEP_KEY" "invalid_php_binary" "The PHP binary path is invalid."
-fi
-
-if [[ ! -x "${MF_PHP_BINARY}" ]]; then
-    mini_forge_fail "$STEP_KEY" "missing_php_binary" "PHP binary ${MF_PHP_BINARY} is not installed."
-fi
+mini_forge_require_php_binary "${MF_PHP_BINARY}"
 
 if [[ ! -f "${MF_ARTISAN_PATH}" ]]; then
     mini_forge_fail "$STEP_KEY" "missing_artisan" "artisan was not found at ${MF_ARTISAN_PATH}."

@@ -13,13 +13,7 @@ STEP_KEY="queue_worker.update"
 mini_forge_require_cmd supervisorctl
 mini_forge_assert_queue_worker_config_path "${MF_SUPERVISOR_PROGRAM}" "${MF_SUPERVISOR_CONFIG_PATH}"
 
-if [[ ! "${MF_PHP_BINARY}" =~ ^/usr/bin/php[0-9]+\.[0-9]+$ ]]; then
-    mini_forge_fail "$STEP_KEY" "invalid_php_binary" "The PHP binary path is invalid."
-fi
-
-if [[ ! -x "${MF_PHP_BINARY}" ]]; then
-    mini_forge_fail "$STEP_KEY" "missing_php_binary" "PHP binary ${MF_PHP_BINARY} is not installed."
-fi
+mini_forge_require_php_binary "${MF_PHP_BINARY}"
 
 mini_forge_ensure_php_redis "${MF_PHP_BINARY}" "${MF_PHP_VERSION:-}"
 

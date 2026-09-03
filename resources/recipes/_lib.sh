@@ -970,21 +970,59 @@ mini_forge_ensure_nginx_layout() {
     mini_forge_open_http_firewall
 }
 
-mini_forge_link_php_cli() {
+mini_forge_php_cli_src() {
     local version="$1"
-    local short src
+    local short
     short="$(mini_forge_php_short "$version")"
 
-    if [[ -x "/usr/bin/php${short}" ]]; then
-        src="/usr/bin/php${short}"
-    elif [[ -x "/opt/remi/php${short}/root/usr/bin/php" ]]; then
-        src="/opt/remi/php${short}/root/usr/bin/php"
-    else
+    if [[ -x "/usr/bin/php${version}" ]]; then
+        printf '%s' "/usr/bin/php${version}"
         return 0
     fi
 
+    if [[ -x "/usr/bin/php${short}" ]]; then
+        printf '%s' "/usr/bin/php${short}"
+        return 0
+    fi
+
+    if [[ -x "/opt/remi/php${short}/root/usr/bin/php" ]]; then
+        printf '%s' "/opt/remi/php${short}/root/usr/bin/php"
+        return 0
+    fi
+
+    return 1
+}
+
+mini_forge_link_php_cli() {
+    local version="$1"
+    local src
+
+    src="$(mini_forge_php_cli_src "$version")" || return 0
+
     sudo -n ln -sfn "$src" "/usr/local/bin/php${version}"
     sudo -n ln -sfn "$src" /usr/local/bin/php
+
+    # Queue workers and supervisor always invoke /usr/bin/phpX.Y (Ubuntu/Sury).
+    # Remi on Oracle Linux ships phpXY or the SCL path instead.
+    if [[ ! -x "/usr/bin/php${version}" ]]; then
+        sudo -n ln -sfn "$src" "/usr/bin/php${version}"
+    fi
+}
+
+mini_forge_require_php_binary() {
+    local binary="${1:-}"
+    local version=""
+
+    if [[ ! "${binary}" =~ ^/usr/bin/php([0-9]+\.[0-9]+)$ ]]; then
+        mini_forge_fail "${STEP_KEY}" "invalid_php_binary" "The PHP binary path is invalid."
+    fi
+
+    version="${BASH_REMATCH[1]}"
+    mini_forge_link_php_cli "${version}"
+
+    if [[ ! -x "${binary}" ]]; then
+        mini_forge_fail "${STEP_KEY}" "missing_php_binary" "PHP binary ${binary} is not installed."
+    fi
 }
 
 mini_forge_php_fpm_unit() {
