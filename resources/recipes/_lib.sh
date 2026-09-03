@@ -1054,6 +1054,31 @@ mini_forge_php_fpm_pool_conf() {
     printf '%s' "/etc/php/${version}/fpm/pool.d/www.conf"
 }
 
+mini_forge_ensure_php_run_dir() {
+    local version="${1:-}"
+    local unit=""
+
+    sudo -n mkdir -p /run/php
+    sudo -n chown www-data:www-data /run/php || true
+    printf '%s\n' 'd /run/php 0755 www-data www-data -' 'Z /run/php 0755 www-data www-data -' \
+        | sudo -n tee /etc/tmpfiles.d/stacklab-php.conf >/dev/null
+
+    if [[ -n "$version" ]]; then
+        unit="$(mini_forge_php_fpm_unit "$version")"
+        sudo -n mkdir -p "/etc/systemd/system/${unit}.service.d"
+        printf '%s\n' \
+            '[Service]' \
+            'ExecStartPre=/bin/mkdir -p /run/php' \
+            'ExecStartPre=/bin/chown www-data:www-data /run/php' \
+            | sudo -n tee "/etc/systemd/system/${unit}.service.d/stacklab-socket.conf" >/dev/null
+        sudo -n systemctl daemon-reload || true
+    fi
+
+    if mini_forge_has_cmd restorecon; then
+        sudo -n restorecon -R /run/php >/dev/null 2>&1 || true
+    fi
+}
+
 mini_forge_configure_php_fpm() {
     local version="$1"
     local socket="/run/php/php${version}-fpm.sock"
@@ -1062,8 +1087,7 @@ mini_forge_configure_php_fpm() {
     [[ "$(mini_forge_os_family)" == "rhel" ]] || return 0
 
     mini_forge_ensure_www_data_user
-    sudo -n mkdir -p /run/php
-    sudo -n chown www-data:www-data /run/php || true
+    mini_forge_ensure_php_run_dir "$version"
 
     conf="$(mini_forge_php_fpm_pool_conf "$version")"
     [[ -f "$conf" ]] || return 0
@@ -1074,6 +1098,9 @@ mini_forge_configure_php_fpm() {
         -e "s|^listen = .*|listen = ${socket}|" \
         -e 's/^;*listen.owner = .*/listen.owner = www-data/' \
         -e 's/^;*listen.group = .*/listen.group = www-data/' \
+        -e 's/^;*listen.mode = .*/listen.mode = 0660/' \
+        -e 's/^listen.acl_users = .*/;listen.acl_users =/' \
+        -e 's/^listen.acl_groups = .*/;listen.acl_groups =/' \
         "$conf"
 }
 

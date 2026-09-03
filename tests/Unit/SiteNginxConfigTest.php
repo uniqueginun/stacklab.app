@@ -104,6 +104,7 @@ test('the activate recipe restarts nginx and opens the release to www-data', fun
         ->toContain('mini_forge_ensure_www_data_readable')
         ->toContain('mini_forge_reload_nginx')
         ->toContain('mini_forge_ensure_nginx_layout')
+        ->toContain('mini_forge_configure_php_fpm')
         ->and($lib)
         ->toContain('umask 022')
         ->toContain('systemctl restart nginx')

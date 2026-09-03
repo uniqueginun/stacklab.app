@@ -46,6 +46,7 @@ mini_forge_reload_nginx
 rm -f "${BACKUP}"
 
 if [[ -n "${MF_PHP_VERSION:-}" ]]; then
+    mini_forge_configure_php_fpm "${MF_PHP_VERSION}"
     mini_forge_reload_php_fpm "${MF_PHP_VERSION}"
 fi
 
