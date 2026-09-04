@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { Link } from '@inertiajs/vue3';
+import { ArrowUpRight } from '@lucide/vue';
 import { computed } from 'vue';
 import { show as serverShow } from '@/routes/servers';
 import { source as siteSource } from '@/routes/sites';
@@ -18,7 +19,7 @@ const formatTime = (value: string | null): string => {
 };
 
 const details = computed(() => [
-    { label: 'Domain', value: props.site.domain },
+    { label: 'Domain', value: props.site.domain, href: props.site.url },
     { label: 'Type', value: props.site.type },
     { label: 'Status', value: props.site.status_label },
     { label: 'Web directory', value: props.site.web_directory || '/' },
@@ -71,7 +72,22 @@ const details = computed(() => [
                 class="bg-white px-6 py-4"
             >
                 <dt class="text-xs text-neutral-400">{{ detail.label }}</dt>
-                <dd class="mt-1 truncate font-medium">{{ detail.value }}</dd>
+                <dd class="mt-1 truncate font-medium">
+                    <a
+                        v-if="detail.href"
+                        :href="detail.href"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        class="inline-flex max-w-full items-center gap-1 hover:text-neutral-900"
+                    >
+                        <span class="truncate">{{ detail.value }}</span>
+                        <ArrowUpRight
+                            class="size-3.5 shrink-0 text-neutral-400"
+                            aria-hidden="true"
+                        />
+                    </a>
+                    <template v-else>{{ detail.value }}</template>
+                </dd>
             </div>
             <div class="bg-white px-6 py-4">
                 <dt class="text-xs text-neutral-400">Server</dt>

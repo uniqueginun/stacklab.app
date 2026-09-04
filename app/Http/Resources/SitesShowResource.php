@@ -40,6 +40,7 @@ class SitesShowResource extends SitesIndexResource
             && $this->statusValue() === SiteStatus::DEPLOYED->value
             && $this->current_release_id !== null;
         $data['has_active_ssl'] = $this->resource->hasActiveSsl();
+        $data['url'] = $this->resource->url();
         $data['can_include_www'] = ! str_starts_with(strtolower((string) $this->domain), 'www.');
 
         return $data;

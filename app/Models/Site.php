@@ -133,6 +133,13 @@ class Site extends Model
         return $this->activeCertificate() !== null;
     }
 
+    public function url(): string
+    {
+        $scheme = $this->exists && $this->hasActiveSsl() ? 'https' : 'http';
+
+        return $scheme.'://'.$this->domain;
+    }
+
     /** @return BelongsTo<Release, $this> */
     public function currentRelease(): BelongsTo
     {

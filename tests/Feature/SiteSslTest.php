@@ -77,6 +77,20 @@ test('the owner can view the ssl tab', function () {
         );
 });
 
+test('the site detail page uses https when ssl is active', function () {
+    [$user, $server, $site] = sslSite();
+    SiteCertificate::factory()->for($site)->letsEncrypt()->active()->create();
+
+    $this->actingAs($user)
+        ->get(route('sites.show', $site))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('sites/Show')
+            ->where('site.url', 'https://stacklab.app')
+            ->where('site.has_active_ssl', true)
+        );
+});
+
 test('ssl routes are bound by site uuid', function () {
     [$user, $server, $site] = sslSite();
 

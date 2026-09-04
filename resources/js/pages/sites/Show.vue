@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Head, Link, setLayoutProps } from '@inertiajs/vue3';
-import { ArrowLeft, Globe } from '@lucide/vue';
+import { ArrowLeft, ArrowUpRight, Globe } from '@lucide/vue';
 import { computed, watchEffect } from 'vue';
 import SiteCommandsPanel from '@/components/stacklab/SiteCommandsPanel.vue';
 import SiteDeploymentsPanel from '@/components/stacklab/SiteDeploymentsPanel.vue';
@@ -115,7 +115,14 @@ const pageTitle = computed(() => {
                 </span>
                 <div>
                     <h1 class="text-2xl font-semibold tracking-tight">
-                        {{ site.domain }}
+                        <a
+                            :href="site.url"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            class="hover:text-neutral-700"
+                        >
+                            {{ site.domain }}
+                        </a>
                     </h1>
                     <p class="mt-0.5 text-sm text-neutral-500">
                         {{ site.type }} ·
@@ -130,7 +137,18 @@ const pageTitle = computed(() => {
                 </div>
             </div>
         </div>
-        <StatusBadge :status="site.status" :label="site.status_label" />
+        <div class="flex shrink-0 items-center gap-3">
+            <a
+                :href="site.url"
+                target="_blank"
+                rel="noopener noreferrer"
+                class="inline-flex items-center gap-1.5 rounded-lg border border-neutral-200 bg-white px-3 py-1.5 text-sm font-medium text-neutral-700 transition hover:border-neutral-300 hover:text-neutral-900"
+            >
+                Visit site
+                <ArrowUpRight class="size-3.5" aria-hidden="true" />
+            </a>
+            <StatusBadge :status="site.status" :label="site.status_label" />
+        </div>
     </div>
 
     <SiteInfoPanel v-if="tab === 'info'" :site="site" />

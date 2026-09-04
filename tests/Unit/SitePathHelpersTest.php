@@ -39,3 +39,9 @@ test('it falls back to the generic php binary', function () {
 
     expect($site->phpBinary())->toBe('php');
 });
+
+test('it builds the public site url over http', function () {
+    $site = new Site(['domain' => 'mini-sentry.sh']);
+
+    expect($site->url())->toBe('http://mini-sentry.sh');
+});

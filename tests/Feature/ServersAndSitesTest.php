@@ -471,6 +471,7 @@ test('the site detail page can be rendered', function () {
             ->where('tab', 'info')
             ->where('site.uuid', $site->uuid)
             ->where('site.domain', 'stacklab.app')
+            ->where('site.url', 'http://stacklab.app')
             ->where('site.status', SiteStatus::PENDING->value)
             ->where('site.server.uuid', $server->uuid)
             ->where('site.root_path', $site->root_path)

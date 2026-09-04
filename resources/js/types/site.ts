@@ -47,6 +47,7 @@ export type SiteShow = SiteIndex & {
     can_manage_ssl: boolean;
     can_manage_queues: boolean;
     has_active_ssl: boolean;
+    url: string;
     can_include_www: boolean;
     current_release: {
         uuid: string;
